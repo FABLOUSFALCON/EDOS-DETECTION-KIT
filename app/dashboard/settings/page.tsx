@@ -11,7 +11,7 @@ export default function SettingsPage() {
         "Third-party integrations (SIEM)",
         "Dashboard customization",
         "API key management",
-        "Backup & restore settings"
+        "Backup & restore settings",
       ]}
       estimatedTime="Q1 2026"
     />

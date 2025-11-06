@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.database import User, SecurityAlert
 from ..api.auth import get_current_user
+from ..services.data_generator import DataGenerator
 import random
 
 router = APIRouter()
@@ -129,28 +130,43 @@ async def dismiss_alert(alert_id: str, current_user: User = Depends(get_current_
 
 
 @router.put("/mark-all-read")
-async def mark_all_alerts_read(current_user: User = Depends(get_current_user)):
+async def mark_all_alerts_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Mark all alerts as read"""
-    for alert in alerts_db:
-        alert["read"] = True
-    return {"message": "All alerts marked as read"}
+    # Update all unread alerts for current user
+    updated_count = db.query(SecurityAlert).filter(
+        SecurityAlert.user_id == current_user.id,
+        SecurityAlert.status == 'new'
+    ).update({"status": "acknowledged"})
+    
+    db.commit()
+    return {"message": f"Marked {updated_count} alerts as read"}
 
 
 @router.get("/stats")
-async def get_alert_stats(current_user: User = Depends(get_current_user)):
+async def get_alert_stats(
+    current_user: User = Depends(get_current_user), 
+    db: Session = Depends(get_db)
+):
     """Get alert statistics"""
-    total_alerts = len(alerts_db)
-    unread_alerts = len([a for a in alerts_db if not a["read"]])
+    # Get all alerts for current user
+    alerts = db.query(SecurityAlert).filter(SecurityAlert.user_id == current_user.id).all()
+    
+    total_alerts = len(alerts)
+    unread_alerts = len([a for a in alerts if a.status == 'new'])
 
-    # Count by level
+    # Count by severity level
     level_counts = {}
-    for alert in alerts_db:
-        level = alert["level"]
+    for alert in alerts:
+        level = alert.severity.upper()
         level_counts[level] = level_counts.get(level, 0) + 1
 
     # Recent alerts (last 24 hours)
-    recent_cutoff = datetime.utcnow() - timedelta(hours=24)
-    recent_alerts = len([a for a in alerts_db if a["timestamp"] > recent_cutoff])
+    from datetime import timezone
+    recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    recent_alerts = len([a for a in alerts if a.detected_at > recent_cutoff])
 
     return {
         "total_alerts": total_alerts,
@@ -159,3 +175,71 @@ async def get_alert_stats(current_user: User = Depends(get_current_user)):
         "level_breakdown": level_counts,
         "timestamp": datetime.utcnow().isoformat(),
     }
+
+
+@router.post("/generate-test-data")
+async def generate_test_alerts(
+    count: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate test alerts for development/demo purposes"""
+    generator = DataGenerator()
+    created_alerts = []
+
+    for _ in range(count):
+        # Generate alert data
+        alert_data = generator.generate_alert()
+
+        # Create database record
+        db_alert = SecurityAlert(
+            user_id=current_user.id,
+            type=(
+                alert_data.alert_type
+                if hasattr(alert_data, "alert_type")
+                else "general"
+            ),
+            category="network",
+            severity=(
+                alert_data.level.lower() if hasattr(alert_data, "level") else "medium"
+            ),
+            title=f"Security Alert - {alert_data.alert_type if hasattr(alert_data, 'alert_type') else 'General'}",
+            description=(
+                alert_data.message
+                if hasattr(alert_data, "message")
+                else "Test alert generated for demonstration"
+            ),
+            source_ip=(
+                alert_data.source_ip
+                if hasattr(alert_data, "source_ip")
+                else "192.168.1." + str(random.randint(1, 254))
+            ),
+            target_ip=(
+                alert_data.destination_ip
+                if hasattr(alert_data, "destination_ip")
+                else "10.0.0." + str(random.randint(1, 254))
+            ),
+            target_port=(
+                alert_data.destination_port
+                if hasattr(alert_data, "destination_port")
+                else random.randint(80, 9999)
+            ),
+            detection_method="ml_analysis",
+            confidence_score=random.uniform(0.75, 0.99),
+            status="new",
+            detected_at=datetime.utcnow() - timedelta(hours=random.randint(0, 48)),
+        )
+
+        db.add(db_alert)
+        created_alerts.append(
+            {
+                "id": str(db_alert.id),
+                "severity": db_alert.severity,
+                "title": db_alert.title,
+                "detected_at": db_alert.detected_at.isoformat(),
+            }
+        )
+
+    db.commit()
+
+    return {"message": f"Generated {count} test alerts", "alerts": created_alerts}

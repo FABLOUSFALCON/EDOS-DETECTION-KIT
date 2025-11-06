@@ -8,10 +8,10 @@ export default function NetworkPage() {
       features={[
         "Deep packet inspection",
         "Traffic pattern analysis",
-        "Bandwidth utilization monitoring", 
+        "Bandwidth utilization monitoring",
         "Protocol distribution charts",
         "Anomaly detection algorithms",
-        "Network topology mapping"
+        "Network topology mapping",
       ]}
       estimatedTime="Q1 2026"
     />

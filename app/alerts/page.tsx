@@ -35,15 +35,44 @@ export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [stats, setStats] = useState<AlertStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [filter, setFilter] = useState<{
     level: string | null;
     read: boolean | null;
   }>({ level: null, read: null });
 
+  const login = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: "puneet",
+          password: "12345",
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem("token", data.access_token);
+        setIsAuthenticated(true);
+        return true;
+      }
+    } catch (error) {
+      console.error("Error logging in:", error);
+    }
+    return false;
+  };
+
   const fetchAlerts = async () => {
     try {
       const token = localStorage.getItem("token");
-      if (!token) return;
+      if (!token) {
+        setIsAuthenticated(false);
+        return;
+      }
 
       const params = new URLSearchParams();
       if (filter.level) params.append("level", filter.level);
@@ -59,6 +88,14 @@ export default function AlertsPage() {
       if (response.ok) {
         const data = await response.json();
         setAlerts(data);
+        setIsAuthenticated(true);
+      } else if (response.status === 401) {
+        // Token expired, try to login again
+        const loginSuccess = await login();
+        if (loginSuccess) {
+          // Retry fetching alerts
+          await fetchAlerts();
+        }
       }
     } catch (error) {
       console.error("Error fetching alerts:", error);
@@ -132,6 +169,20 @@ export default function AlertsPage() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      
+      // Check if we have a token
+      const token = localStorage.getItem("token");
+      if (!token) {
+        // Try to login automatically
+        const loginSuccess = await login();
+        if (!loginSuccess) {
+          setLoading(false);
+          return;
+        }
+      } else {
+        setIsAuthenticated(true);
+      }
+
       await Promise.all([fetchAlerts(), fetchStats()]);
       setLoading(false);
     };
@@ -173,6 +224,33 @@ export default function AlertsPage() {
           <div className="text-center">
             <div className="animate-spin text-4xl mb-4">⚡</div>
             <div>[LOADING] Analyzing threat intelligence...</div>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-full text-green-400 font-mono">
+          <div className="text-center">
+            <Shield className="h-16 w-16 mx-auto mb-4 text-red-400" />
+            <div className="text-red-400 mb-4">[ACCESS DENIED] Authentication Required</div>
+            <Button
+              onClick={async () => {
+                setLoading(true);
+                const success = await login();
+                if (success) {
+                  await Promise.all([fetchAlerts(), fetchStats()]);
+                }
+                setLoading(false);
+              }}
+              className="bg-green-700 hover:bg-green-600 text-black font-bold"
+            >
+              <Shield className="h-4 w-4 mr-2" />
+              Authenticate System
+            </Button>
           </div>
         </div>
       </DashboardLayout>

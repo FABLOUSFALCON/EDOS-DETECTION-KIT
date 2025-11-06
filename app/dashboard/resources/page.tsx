@@ -11,7 +11,7 @@ export default function ResourcesPage() {
         "Network interface statistics",
         "Process-level resource analysis",
         "Resource exhaustion detection",
-        "Performance optimization insights"
+        "Performance optimization insights",
       ]}
       estimatedTime="Q1 2026"
     />

@@ -11,7 +11,7 @@ export default function GlobePage() {
         "Geolocation-based threats",
         "Country-wise attack statistics",
         "Threat trajectory visualization",
-        "WebGL-powered graphics"
+        "WebGL-powered graphics",
       ]}
       estimatedTime="Q2 2026"
     />

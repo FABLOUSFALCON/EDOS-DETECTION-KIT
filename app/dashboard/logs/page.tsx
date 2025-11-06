@@ -11,7 +11,7 @@ export default function LogsPage() {
         "Pattern recognition algorithms",
         "Event correlation engine",
         "Log-based threat detection",
-        "Compliance reporting tools"
+        "Compliance reporting tools",
       ]}
       estimatedTime="Q1 2026"
     />

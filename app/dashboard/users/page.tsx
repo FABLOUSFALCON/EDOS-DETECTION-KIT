@@ -11,7 +11,7 @@ export default function UsersPage() {
         "User activity monitoring",
         "Session management & tracking",
         "Privilege escalation detection",
-        "Identity governance & compliance"
+        "Identity governance & compliance",
       ]}
       estimatedTime="Q1 2026"
     />

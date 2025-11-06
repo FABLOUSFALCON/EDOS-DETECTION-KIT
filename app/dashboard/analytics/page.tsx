@@ -11,7 +11,7 @@ export default function AnalyticsPage() {
         "Security trend visualization",
         "Risk assessment algorithms",
         "Predictive analytics models",
-        "Custom report generation"
+        "Custom report generation",
       ]}
       estimatedTime="Q2 2026"
     />
