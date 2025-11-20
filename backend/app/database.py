@@ -14,17 +14,27 @@ from typing import Generator
 # Database configuration
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://postgres:masterpuneet@db.fekiwfmrimfkkskjmldt.supabase.co:5432/postgres",
+    "sqlite:///./edos_security.db",  # SQLite fallback for local development
 )
 
 # Create SQLAlchemy engine
-engine = create_engine(
-    DATABASE_URL,
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    echo=True if os.getenv("DEBUG") == "true" else False,
-)
+if DATABASE_URL.startswith("sqlite"):
+    # SQLite configuration
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=True if os.getenv("DEBUG") == "true" else False,
+    )
+else:
+    # PostgreSQL configuration
+    engine = create_engine(
+        DATABASE_URL,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        echo=True if os.getenv("DEBUG") == "true" else False,
+    )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
