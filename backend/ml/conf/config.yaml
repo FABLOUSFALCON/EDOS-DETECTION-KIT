@@ -1,0 +1,5 @@
+# Minimal BEAST MODE configuration
+model_path: data/06_models/trained_impafs_model.pkl
+buffer_size: 500
+max_wait_time: 5.0
+log_level: INFO

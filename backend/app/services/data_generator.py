@@ -10,6 +10,7 @@ from typing import List, Dict, Any
 from faker import Faker
 
 from app.models.schemas import *
+from app.utils.pydantic_compat import model_to_dict
 
 fake = Faker()
 
@@ -328,7 +329,7 @@ class DataGenerator:
                 data_size=f"{random.randint(1, 100)}MB",
                 duration=random.randint(15, 300),
             )
-            arcs.append(arc.dict())
+            arcs.append(model_to_dict(arc))
 
         # Generate points (monitoring stations)
         points = []
@@ -348,7 +349,7 @@ class DataGenerator:
                 connections=random.randint(50, 500),
                 status="threat" if is_threat else "monitoring",
             )
-            points.append(point.dict())
+            points.append(model_to_dict(point))
 
         return {"arcs": arcs, "points": points}
 
@@ -368,7 +369,7 @@ class DataGenerator:
         )
         self.current_metrics["active_connections"] += random.randint(-100, 200)
 
-        return MetricsResponse(
+        resp = MetricsResponse(
             system=SystemMetrics(
                 cpu_usage=round(self.current_metrics["cpu_usage"], 1),
                 memory_usage=round(self.current_metrics["memory_usage"], 1),
@@ -390,7 +391,8 @@ class DataGenerator:
                 bandwidth_usage=random.uniform(60, 90),
                 regions_monitored=15,
             ),
-        ).dict()
+        )
+        return model_to_dict(resp)
 
     def generate_log(self) -> LogEntry:
         """Generate a realistic log entry"""

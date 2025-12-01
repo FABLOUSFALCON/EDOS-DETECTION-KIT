@@ -38,11 +38,14 @@ class Settings(BaseSettings):
     # WebSocket
     WS_MAX_CONNECTIONS: int = 100
     WEBSOCKET_HOST: str = "0.0.0.0"
-    WEBSOCKET_PORT: int = 8000
+    # Changed default backend port to avoid local conflicts during development
+    WEBSOCKET_PORT: int = 23335
 
     # Data Generation
     GENERATE_SAMPLE_DATA: bool = True
     DATA_GENERATION_INTERVAL: int = 3  # seconds
+    # Debug / engine echo
+    DEBUG: bool = False
 
     @property
     def use_supabase(self) -> bool:

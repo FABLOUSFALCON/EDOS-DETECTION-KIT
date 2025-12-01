@@ -24,6 +24,8 @@ def serialize_datetime_dict(data) -> Dict[str, Any]:
         return {key: serialize_datetime_dict(value) for key, value in data.items()}
     elif isinstance(data, list):
         return [serialize_datetime_dict(item) for item in data]
+    elif hasattr(data, "model_dump"):
+        return serialize_datetime_dict(data.model_dump())
     elif hasattr(data, "dict"):
         return serialize_datetime_dict(data.dict())
     else:
@@ -95,12 +97,30 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("⚠️ Real-time monitoring disabled - Supabase not configured")
 
+    # Start Redis Streams consumer for ML predictions if Redis is configured
+    if settings.REDIS_URL:
+        try:
+            from app.services.redis_consumer import start_consumer_task
+
+            logger.info("🔁 Starting Redis Streams consumer for ML predictions...")
+            consumer_task = asyncio.create_task(start_consumer_task(app))
+            app.state._redis_consumer_task = consumer_task
+        except Exception as e:
+            logger.warning(f"Failed to start Redis consumer: {e}")
+
     yield
 
     # Shutdown
     logger.info("🛑 Shutting down EDoS Security Dashboard Backend")
     if "background_task" in locals():
         background_task.cancel()
+    # Cancel Redis consumer if running
+    try:
+        task = getattr(app.state, "_redis_consumer_task", None)
+        if task is not None:
+            task.cancel()
+    except Exception:
+        pass
 
 
 async def setup_supabase_subscriptions():

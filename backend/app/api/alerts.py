@@ -2,20 +2,77 @@
 Alerts API endpoints for real-time threat detection
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import uuid
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.database import UserProfile, SecurityAlert
 from ..api.supabase_auth import get_current_user, get_current_user_id
+from ..realtime_manager import get_realtime_manager
 import random
+from pydantic import BaseModel, Field
+from app.utils.pydantic_compat import model_to_dict
 
 router = APIRouter()
 
-# Initialize with some sample alerts
 router = APIRouter()
+
+# Initialize realtime manager
+realtime_manager = get_realtime_manager()
+
+# ================================
+# ML INTEGRATION SCHEMAS
+# ================================
+
+
+class NetworkFlowInput(BaseModel):
+    """Network flow data from ML service"""
+
+    dst_port: int
+    flow_duration: float
+    tot_fwd_pkts: int
+    tot_bwd_pkts: int
+    fwd_pkt_len_max: int
+    fwd_pkt_len_min: int
+    bwd_pkt_len_max: int
+    bwd_pkt_len_mean: float
+    flow_byts_s: float
+    flow_pkts_s: float
+    flow_iat_mean: float
+    flow_iat_std: float
+    flow_iat_max: float
+    fwd_iat_std: float
+    bwd_pkts_s: float
+    psh_flag_cnt: int
+    ack_flag_cnt: int
+    init_fwd_win_byts: int
+    init_bwd_win_byts: int
+    fwd_seg_size_min: int
+
+
+class MLPrediction(BaseModel):
+    """ML prediction result"""
+
+    is_attack: bool
+    attack_probability: float
+    benign_probability: float
+    confidence: float
+    model_version: str
+    base_model_scores: Optional[Dict[str, float]] = None
+    explanation: Optional[Dict[str, Any]] = None
+
+
+class MLAlertRequest(BaseModel):
+    """Request to create alerts from ML predictions"""
+
+    resource_id: str = Field(..., description="User's resource ID")
+    source_ip: str = Field(..., description="Source IP address")
+    target_ip: Optional[str] = Field(None, description="Target IP (optional)")
+    flow_data: NetworkFlowInput
+    prediction: MLPrediction
+
 
 # Sample alerts removed - now using real database
 
@@ -241,3 +298,262 @@ async def generate_test_alerts(
     db.commit()
 
     return {"message": f"Generated {count} test alerts", "alerts": created_alerts}
+
+
+# ================================
+# ML INTEGRATION ENDPOINTS
+# ================================
+
+
+@router.post("/ml-prediction")
+async def create_alert_from_ml(
+    ml_request: MLAlertRequest,
+    background_tasks: BackgroundTasks,
+    current_user: UserProfile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Create security alert from ML prediction
+    This is the key endpoint that receives ML predictions and converts them to database alerts
+    """
+    try:
+        # Only create alerts for detected attacks
+        if not ml_request.prediction.is_attack:
+            return {
+                "message": "No attack detected, no alert created",
+                "prediction": model_to_dict(ml_request.prediction),
+            }
+
+        # Calculate severity based on ML confidence and attack probability
+        severity = _calculate_severity(
+            ml_request.prediction.confidence, ml_request.prediction.attack_probability
+        )
+
+        # Determine attack type from network characteristics
+        attack_type = _determine_attack_type(
+            ml_request.flow_data.dst_port,
+            ml_request.flow_data,
+            ml_request.prediction,
+        )
+
+        # Create database alert
+        db_alert = SecurityAlert(
+            user_id=current_user.id,
+            resource_id=ml_request.resource_id,
+            type=attack_type,
+            category="network",
+            severity=severity,
+            title=f"ML-Detected {attack_type.replace('_', ' ').title()} Attack",
+            description=_generate_alert_description(
+                ml_request.source_ip, ml_request.prediction, ml_request.flow_data
+            ),
+            source_ip=ml_request.source_ip,
+            target_ip=ml_request.target_ip,
+            target_port=ml_request.flow_data.dst_port,
+            detection_method=ml_request.prediction.model_version,
+            confidence_score=ml_request.prediction.confidence
+            * 100,  # Convert to percentage
+            status="new",
+            raw_data={
+                "ml_prediction": model_to_dict(ml_request.prediction),
+                "flow_data": model_to_dict(ml_request.flow_data),
+                "processed_at": datetime.utcnow().isoformat(),
+            },
+            detected_at=datetime.utcnow(),
+        )
+
+        db.add(db_alert)
+        db.commit()
+        db.refresh(db_alert)
+
+        # Send real-time alert via WebSocket
+        background_tasks.add_task(
+            _broadcast_new_alert, alert=db_alert, user_id=current_user.id
+        )
+
+        return {
+            "message": "Alert created from ML prediction",
+            "alert_id": str(db_alert.id),
+            "severity": db_alert.severity,
+            "confidence": ml_request.prediction.confidence,
+            "attack_type": attack_type,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error creating ML alert: {str(e)}"
+        )
+
+
+@router.post("/batch-ml-predictions")
+async def create_batch_alerts_from_ml(
+    predictions: List[MLAlertRequest],
+    background_tasks: BackgroundTasks,
+    current_user: UserProfile = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Create multiple alerts from batch ML predictions
+    Optimized for high-volume ML processing
+    """
+    try:
+        alerts_created = 0
+        attack_predictions = []
+
+        # Filter only attack predictions
+        for prediction_request in predictions:
+            if prediction_request.prediction.is_attack:
+                attack_predictions.append(prediction_request)
+
+        # Create alerts for attack predictions
+        created_alerts = []
+        for ml_request in attack_predictions:
+            severity = _calculate_severity(
+                ml_request.prediction.confidence,
+                ml_request.prediction.attack_probability,
+            )
+            attack_type = _determine_attack_type(
+                ml_request.flow_data.dst_port,
+                ml_request.flow_data,
+                ml_request.prediction,
+            )
+
+            db_alert = SecurityAlert(
+                user_id=current_user.id,
+                resource_id=ml_request.resource_id,
+                type=attack_type,
+                category="network",
+                severity=severity,
+                title=f"ML-Detected {attack_type.replace('_', ' ').title()} Attack",
+                description=_generate_alert_description(
+                    ml_request.source_ip, ml_request.prediction, ml_request.flow_data
+                ),
+                source_ip=ml_request.source_ip,
+                target_ip=ml_request.target_ip,
+                target_port=ml_request.flow_data.dst_port,
+                detection_method=ml_request.prediction.model_version,
+                confidence_score=ml_request.prediction.confidence * 100,
+                status="new",
+                raw_data={
+                    "ml_prediction": model_to_dict(ml_request.prediction),
+                    "flow_data": model_to_dict(ml_request.flow_data),
+                    "processed_at": datetime.utcnow().isoformat(),
+                },
+                detected_at=datetime.utcnow(),
+            )
+
+            db.add(db_alert)
+            created_alerts.append(db_alert)
+            alerts_created += 1
+
+        db.commit()
+
+        # Queue real-time broadcasts
+        for alert in created_alerts:
+            background_tasks.add_task(
+                _broadcast_new_alert, alert=alert, user_id=current_user.id
+            )
+
+        return {
+            "message": f"Processed {len(predictions)} predictions, created {alerts_created} alerts",
+            "total_predictions": len(predictions),
+            "attack_predictions": len(attack_predictions),
+            "alerts_created": alerts_created,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error creating batch ML alerts: {str(e)}"
+        )
+
+
+# ================================
+# ML HELPER FUNCTIONS
+# ================================
+
+
+def _calculate_severity(confidence: float, attack_probability: float) -> str:
+    """Calculate alert severity based on ML metrics"""
+    if confidence >= 0.9 and attack_probability >= 0.8:
+        return "critical"
+    elif confidence >= 0.8 and attack_probability >= 0.6:
+        return "high"
+    elif confidence >= 0.6 and attack_probability >= 0.4:
+        return "medium"
+    else:
+        return "low"
+
+
+def _determine_attack_type(
+    dst_port: int, flow_data: NetworkFlowInput, prediction: MLPrediction
+) -> str:
+    """Determine attack type from network flow characteristics"""
+    # Port-based classification
+    if dst_port in [80, 443, 8080, 8443]:
+        return "web_attack"
+    elif dst_port in [22, 2222]:
+        return "ssh_attack"
+    elif dst_port in [21]:
+        return "ftp_attack"
+    elif dst_port in [53]:
+        return "dns_attack"
+    elif dst_port in [25, 587, 465]:
+        return "email_attack"
+
+    # Flow-based classification
+    packet_rate = flow_data.flow_pkts_s
+    flow_duration = flow_data.flow_duration
+
+    if packet_rate > 100:
+        return "ddos"
+    elif flow_duration > 300:
+        return "persistent_threat"
+    elif flow_data.psh_flag_cnt > 10:
+        return "data_exfiltration"
+    else:
+        return "network_intrusion"
+
+
+def _generate_alert_description(
+    source_ip: str, prediction: MLPrediction, flow_data: NetworkFlowInput
+) -> str:
+    """Generate human-readable alert description"""
+    return (
+        f"Machine learning model detected suspicious network activity from {source_ip} "
+        f"targeting port {flow_data.dst_port}. "
+        f"Confidence: {prediction.confidence:.1%}, "
+        f"Attack Probability: {prediction.attack_probability:.1%}. "
+        f"Flow characteristics: {flow_data.tot_fwd_pkts} forward packets, "
+        f"{flow_data.flow_duration:.1f}s duration."
+    )
+
+
+async def _broadcast_new_alert(alert: SecurityAlert, user_id: str):
+    """Broadcast new alert via WebSocket to connected clients"""
+    try:
+        alert_data = {
+            "type": "new_alert",
+            "data": {
+                "id": str(alert.id),
+                "severity": alert.severity,
+                "title": alert.title,
+                "description": alert.description,
+                "source_ip": str(alert.source_ip) if alert.source_ip else None,
+                "target_port": alert.target_port,
+                "confidence": (
+                    float(alert.confidence_score) if alert.confidence_score else 0
+                ),
+                "detected_at": alert.detected_at.isoformat(),
+                "status": alert.status,
+                "attack_type": alert.type,
+            },
+        }
+
+        # Broadcast to user-specific channel
+        await realtime_manager.broadcast_to_topic(f"alerts_user_{user_id}", alert_data)
+
+        # Also broadcast to general alerts channel
+        await realtime_manager.broadcast_to_topic("alerts", alert_data)
+
+    except Exception as e:
+        print(f"Error broadcasting alert: {e}")

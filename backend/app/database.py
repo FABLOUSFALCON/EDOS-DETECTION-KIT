@@ -10,12 +10,18 @@ from contextlib import contextmanager
 import asyncpg
 import asyncio
 from typing import Generator
+from app.core.config import settings
 
 # Database configuration
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "sqlite:///./edos_security.db",  # SQLite fallback for local development
-)
+# Use the pydantic Settings which reads `backend/.env` (Settings.Config.env_file)
+# Fall back to environment var or sqlite if Settings is not available for some reason
+try:
+    DATABASE_URL = settings.effective_database_url
+except Exception:
+    DATABASE_URL = os.getenv(
+        "DATABASE_URL",
+        "sqlite:///./edos_security.db",  # SQLite fallback for local development
+    )
 
 # Create SQLAlchemy engine
 if DATABASE_URL.startswith("sqlite"):

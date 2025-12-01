@@ -1,0 +1,363 @@
+openapi: 3.0.3
+info:
+  title: EDoS Detection Dashboard API (Spring Boot contract)
+  description: OpenAPI 3 contract for backend endpoints and ML service used by the frontend and ML integration.
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+    description: Production backend server
+  - url: http://localhost:8000
+    description: Local backend (dev)
+  - url: http://ml-host:23333
+    description: ML service (BEAST MODE)
+paths:
+  /api/alerts:
+    get:
+      summary: List alerts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: level
+          in: query
+          schema:
+            type: string
+        - name: read
+          in: query
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Array of alert summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlertSummary"
+  /api/alerts/ml-prediction:
+    post:
+      summary: Create alert from ML prediction (single)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MLAlertRequest"
+      responses:
+        "200":
+          description: Alert created or no attack
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  alert_id:
+                    type: string
+                  severity:
+                    type: string
+                  confidence:
+                    type: number
+  /api/alerts/batch-ml-predictions:
+    post:
+      summary: Create alerts from batch ML predictions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/MLAlertRequest"
+      responses:
+        "200":
+          description: Batch processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  total_predictions:
+                    type: integer
+                  attack_predictions:
+                    type: integer
+                  alerts_created:
+                    type: integer
+  /api/ml/predict:
+    post:
+      summary: Proxy single flow to ML service (developer proxy)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NetworkFlow"
+      responses:
+        "200":
+          description: ML prediction forwarded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prediction:
+                    $ref: "#/components/schemas/PredictionDetail"
+                  user_id:
+                    type: string
+                  timestamp:
+                    type: string
+  /api/ml/predict-batch:
+    post:
+      summary: Proxy batch to ML service
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                flows:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/NetworkFlow"
+      responses:
+        "200":
+          description: Batch result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  predictions:
+                    type: object
+                  user_id:
+                    type: string
+                  timestamp:
+                    type: string
+  /predict:
+    post:
+      summary: ML service single predict (BEAST MODE)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SinglePredictionRequest"
+      responses:
+        "200":
+          description: PredictionDetail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictionDetail"
+  /predict/batch:
+    post:
+      summary: ML service batch predict
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BatchPredictionRequest"
+      responses:
+        "200":
+          description: BatchPredictionResponse
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BatchPredictionResponse"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    AlertSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        level:
+          type: string
+        message:
+          type: string
+        source:
+          type: string
+        timestamp:
+          type: string
+        time:
+          type: string
+        read:
+          type: boolean
+        title:
+          type: string
+        category:
+          type: string
+        confidence:
+          type: number
+        target_ip:
+          type: string
+        target_port:
+          type: integer
+        detection_method:
+          type: string
+    NetworkFlow:
+      type: object
+      properties:
+        dst_port:
+          type: integer
+        flow_duration:
+          type: number
+        tot_fwd_pkts:
+          type: integer
+        tot_bwd_pkts:
+          type: integer
+        fwd_pkt_len_max:
+          type: integer
+        fwd_pkt_len_min:
+          type: integer
+        bwd_pkt_len_max:
+          type: integer
+        bwd_pkt_len_mean:
+          type: number
+        flow_byts_s:
+          type: number
+        flow_pkts_s:
+          type: number
+        flow_iat_mean:
+          type: number
+        flow_iat_std:
+          type: number
+        flow_iat_max:
+          type: number
+        fwd_iat_std:
+          type: number
+        bwd_pkts_s:
+          type: number
+        psh_flag_cnt:
+          type: integer
+        ack_flag_cnt:
+          type: integer
+        init_fwd_win_byts:
+          type: integer
+        init_bwd_win_byts:
+          type: integer
+        fwd_seg_size_min:
+          type: integer
+        timestamp:
+          type: string
+        src_ip:
+          type: string
+        dst_ip:
+          type: string
+        src_port:
+          type: integer
+        protocol:
+          type: string
+    SinglePredictionRequest:
+      type: object
+      properties:
+        flow:
+          $ref: "#/components/schemas/NetworkFlow"
+        client_id:
+          type: string
+        resource_id:
+          type: string
+        timestamp:
+          type: string
+      required: [flow, client_id, resource_id]
+    BatchPredictionRequest:
+      type: object
+      properties:
+        flows:
+          type: array
+          items:
+            $ref: "#/components/schemas/NetworkFlow"
+        include_confidence:
+          type: boolean
+          default: true
+        client_id:
+          type: string
+        resource_id:
+          type: string
+      required: [flows, client_id, resource_id]
+    PredictionDetail:
+      type: object
+      properties:
+        is_attack:
+          type: boolean
+        attack_probability:
+          type: number
+        benign_probability:
+          type: number
+        confidence:
+          type: number
+        model_version:
+          type: string
+        base_model_scores:
+          type: object
+          additionalProperties:
+            type: number
+        explanation:
+          type: object
+    BatchPredictionResponse:
+      type: object
+      properties:
+        predictions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PredictionDetail"
+        statistics:
+          type: object
+    MLPrediction:
+      type: object
+      properties:
+        is_attack:
+          type: boolean
+        attack_probability:
+          type: number
+        benign_probability:
+          type: number
+        confidence:
+          type: number
+        model_version:
+          type: string
+        base_model_scores:
+          type: object
+          additionalProperties:
+            type: number
+        explanation:
+          type: object
+    MLAlertRequest:
+      type: object
+      properties:
+        resource_id:
+          type: string
+        source_ip:
+          type: string
+        target_ip:
+          type: string
+        flow_data:
+          $ref: "#/components/schemas/NetworkFlow"
+        prediction:
+          $ref: "#/components/schemas/MLPrediction"
+      required: [resource_id, source_ip, flow_data, prediction]
+security:
+  - bearerAuth: []

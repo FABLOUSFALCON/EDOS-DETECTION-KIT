@@ -4,6 +4,7 @@ import "@fontsource/jetbrains-mono";
 import "./simple.css";
 import { GlobalAlertProvider } from "@/components/global-alert-provider";
 import { AuthProvider } from "@/components/auth-context";
+import { TwentyFirstToolbar } from "@21st-extension/toolbar-next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +29,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <TwentyFirstToolbar
+          config={{
+            plugins: [], // Add your custom plugins here
+          }}
+        />
         <AuthProvider>
           <GlobalAlertProvider>{children}</GlobalAlertProvider>
         </AuthProvider>
