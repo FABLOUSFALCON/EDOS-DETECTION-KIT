@@ -41,7 +41,7 @@ from collections import deque
 import asyncio
 
 # Redis publisher for predictions (minimal metadata only)
-from publisher import publish_prediction
+from publisher import publish_prediction, publish_batch_results
 
 
 # Configure logging
@@ -973,9 +973,30 @@ def convert_cicflow_to_beast_format(
 ) -> dict[str, object]:
     """Convert CICFlowMeter field names to Beast Mode format"""
     converted = {}
+
+    # Convert mapped ML feature fields
     for cicflow_field, beast_field in CICFLOW_FIELD_MAPPING.items():
         if cicflow_field in cicflow_data:
             converted[beast_field] = cicflow_data[cicflow_field]
+
+    # Preserve metadata fields that we need for tracking and Redis publishing
+    # (but exclude fields that are already converted above to avoid duplicates)
+    metadata_fields = [
+        "client_id",
+        "resource_id",
+        "src_ip",
+        "dst_ip",
+        "src_port",
+        "protocol",
+        "timestamp",
+    ]
+
+    # Only preserve metadata fields that are NOT already in the mapping
+    mapped_fields = set(CICFLOW_FIELD_MAPPING.keys())
+    for field in metadata_fields:
+        if field in cicflow_data and field not in mapped_fields:
+            converted[field] = cicflow_data[field]
+
     return converted
 
 
@@ -1115,21 +1136,49 @@ async def process_buffer_batch() -> dict[str, object]:
                         "flow": flow_meta,
                     }
                     await broadcast_to_live_clients(message)
-                    # Publish to Redis (non-blocking)
-                    try:
-                        asyncio.create_task(
-                            publish_prediction(
-                                pred, "unknown_client", "unknown_resource", flow_meta
-                            )
-                        )
-                    except Exception:
-                        logger.debug(
-                            "Failed to schedule publish to Redis from buffered batch"
-                        )
         except Exception:
             logger.debug(
                 "Failed to broadcast buffered batch predictions to live clients"
             )
+
+        # Publish complete batch results to Redis (instead of individual predictions)
+        try:
+            # Get client_id and resource_id from first flow (they should be same for the batch)
+            first_flow = flows_to_process[0] if flows_to_process else {}
+            client_id = first_flow.get("client_id", "unknown_client")
+            resource_id = first_flow.get("resource_id", "unknown_resource")
+
+            # Debug: Log what we found in first_flow
+            logger.info(f"🔍 First flow keys: {list(first_flow.keys())[:10]}...")
+            logger.info(
+                f"🔍 Extracted client_id: {client_id}, resource_id: {resource_id}"
+            )
+
+            batch_data = {
+                "predictions": predictions,
+                "statistics": {
+                    "total_flows": len(converted_flows),
+                    "attack_predictions": attack_predictions,
+                    "benign_predictions": benign_predictions,
+                    "processing_time_ms": processing_time * 1000,
+                    "throughput_flows_per_sec": throughput,
+                    "average_confidence": (
+                        sum(p.get("confidence", 0) for p in predictions)
+                        / len(predictions)
+                        if predictions
+                        else 0
+                    ),
+                },
+            }
+
+            asyncio.create_task(
+                publish_batch_results(batch_data, client_id, resource_id)
+            )
+            logger.info(
+                f"📤 Published batch results to Redis: {len(predictions)} predictions, {attack_predictions} attacks"
+            )
+        except Exception as e:
+            logger.debug(f"Failed to publish batch results to Redis: {e}")
 
         return {
             "batch_processing": {

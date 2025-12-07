@@ -42,6 +42,7 @@ from app.api import (
     settings_api,
     supabase_auth,
     websockets,
+    live_monitoring,
 )
 from app.realtime_manager import get_realtime_manager
 from app.supabase_client import get_supabase_client
@@ -183,6 +184,9 @@ app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
 app.include_router(logs.router, prefix="/api/logs", tags=["Logs"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(websockets.router, prefix="/ws", tags=["WebSockets"])
+app.include_router(
+    live_monitoring.router, prefix="/api/ml", tags=["ML Live Monitoring"]
+)
 
 
 # Health check

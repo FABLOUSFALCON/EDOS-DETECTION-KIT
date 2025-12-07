@@ -50,3 +50,37 @@ async def publish_prediction(
     except Exception as e:
         logger.exception(f"Failed to publish prediction to Redis: {e}")
         return None
+
+
+async def publish_batch_results(
+    batch_results: dict,
+    client_id: str,
+    resource_id: str,
+    message_id: Optional[str] = None,
+) -> Optional[str]:
+    """Publish complete batch processing results to Redis Streams.
+
+    - `batch_results` should contain predictions and statistics from batch processing
+    - returns the Redis entry id or None on failure
+    """
+    try:
+        redis = aioredis.from_url(settings.REDIS_URL)
+
+        msg = {
+            "message_id": message_id or str(uuid.uuid4()),
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "client_id": client_id,
+            "resource_id": resource_id,
+            "batch_results": batch_results,
+            "source": "beast_mode_batch_api",
+        }
+
+        # XADD with a single field `msg` containing JSON for simplicity
+        entry_id = await redis.xadd(REDIS_STREAM, {"msg": json.dumps(msg)})
+        logger.debug(f"Published batch results to stream {REDIS_STREAM} id={entry_id}")
+        await redis.close()
+        return entry_id
+
+    except Exception as e:
+        logger.exception(f"Failed to publish batch results to Redis: {e}")
+        return None
