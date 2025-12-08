@@ -21,30 +21,30 @@ import {
 
 interface Alert {
   id: string;
-  level: string;
-  message: string;
-  source: string;
-  timestamp: string;
-  time: string;
-  read: boolean;
-  title: string;
-  category: string;
-  confidence?: number;
-  target_ip?: string;
-  target_port?: number;
-  detection_method?: string;
+  user_id: string;
+  resource_id: string | null;
   severity: string;
+  title: string;
+  description: string;
+  source_ip: string | null;
+  target_ip: string | null;
+  target_port: number | null;
+  detection_method: string;
+  confidence_score: number;
   status: string;
+  raw_data: any;
   detected_at: string;
-  attack_type: string;
+  created_at: string;
+  category: {
+    name: string;
+    color: string;
+  };
 }
 
 interface AlertStats {
-  total_alerts: number;
-  unread_alerts: number;
-  recent_alerts_24h: number;
-  level_breakdown: Record<string, number>;
-  timestamp: string;
+  total_unresolved: number;
+  recent_24h: number;
+  severity_breakdown: Record<string, number>;
 }
 
 export default function AlertsPage() {
@@ -70,15 +70,8 @@ export default function AlertsPage() {
       setLoading(true);
       setError(null);
 
-      // Check if user is authenticated
-      if (!session?.access_token) {
-        setError("Authentication required");
-        return;
-      }
-
-      const response = await fetch("http://localhost:23335/api/alerts/", {
+      const response = await fetch("http://localhost:23335/api/alerts-new/", {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       });
@@ -88,12 +81,11 @@ export default function AlertsPage() {
       }
 
       const alertsData = await response.json();
-      setAlerts(alertsData);
+      setAlerts(alertsData.alerts || []);
 
       // Fetch stats
-      const statsResponse = await fetch("http://localhost:23335/api/alerts/stats", {
+      const statsResponse = await fetch("http://localhost:23335/api/alerts-new/stats", {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
       });
@@ -119,19 +111,19 @@ export default function AlertsPage() {
       filtered = filtered.filter(
         (alert) =>
           alert.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          alert.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          alert.source.toLowerCase().includes(searchTerm.toLowerCase())
+          alert.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (alert.source_ip && alert.source_ip.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
     // Level filter
     if (selectedLevel !== "all") {
-      filtered = filtered.filter((alert) => alert.level.toLowerCase() === selectedLevel.toLowerCase());
+      filtered = filtered.filter((alert) => alert.severity.toLowerCase() === selectedLevel.toLowerCase());
     }
 
     // Unread filter
     if (showUnreadOnly) {
-      filtered = filtered.filter((alert) => !alert.read);
+      filtered = filtered.filter((alert) => alert.status === "new");
     }
 
     setFilteredAlerts(filtered);
@@ -140,20 +132,18 @@ export default function AlertsPage() {
   // Mark alert as read
   const markAsRead = async (alertId: string) => {
     try {
-      if (!session?.access_token) return;
-
-      const response = await fetch(`http://localhost:23335/api/alerts/${alertId}/read`, {
+      const response = await fetch(`http://localhost:23335/api/alerts-new/${alertId}`, {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          status: "acknowledged",
+        }),
       });
 
       if (response.ok) {
-        setAlerts((prev) =>
-          prev.map((alert) => (alert.id === alertId ? { ...alert, read: true, status: "acknowledged" } : alert))
-        );
+        setAlerts((prev) => prev.map((alert) => (alert.id === alertId ? { ...alert, status: "acknowledged" } : alert)));
       }
     } catch (err) {
       console.error("Error marking alert as read:", err);
@@ -163,44 +153,36 @@ export default function AlertsPage() {
   // Resolve alert
   const resolveAlert = async (alertId: string) => {
     try {
-      if (!session?.access_token) return;
-
-      const response = await fetch(`http://localhost:23335/api/alerts/${alertId}/resolve`, {
+      const response = await fetch(`http://localhost:23335/api/alerts-new/${alertId}`, {
         method: "PATCH",
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          status: "resolved",
+        }),
       });
 
       if (response.ok) {
-        setAlerts((prev) =>
-          prev.map((alert) => (alert.id === alertId ? { ...alert, status: "resolved", read: true } : alert))
-        );
+        setAlerts((prev) => prev.map((alert) => (alert.id === alertId ? { ...alert, status: "resolved" } : alert)));
       }
     } catch (err) {
       console.error("Error resolving alert:", err);
     }
   };
 
-  // Initial load - wait for authentication
+  // Initial load
   useEffect(() => {
-    if (!authLoading && session) {
-      fetchAlerts();
-    }
-  }, [authLoading, session]);
+    fetchAlerts();
+  }, []);
 
-  // Auto-refresh every 30 seconds (only when authenticated)
+  // Auto-refresh every 30 seconds
   useEffect(() => {
-    if (!session) return;
-
     const interval = setInterval(() => {
-      if (session?.access_token) {
-        fetchAlerts();
-      }
+      fetchAlerts();
     }, 30000);
     return () => clearInterval(interval);
-  }, [session]);
+  }, []);
 
   const getSeverityColor = (level: string) => {
     switch (level.toUpperCase()) {
@@ -320,8 +302,8 @@ export default function AlertsPage() {
                 <div className="flex items-center">
                   <Shield className="w-8 h-8 text-blue-400" />
                   <div className="ml-4">
-                    <p className="text-2xl font-bold text-green-400">{stats.total_alerts}</p>
-                    <p className="text-green-300/70 text-sm">Total Alerts</p>
+                    <p className="text-2xl font-bold text-green-400">{stats.total_unresolved}</p>
+                    <p className="text-green-300/70 text-sm">Unresolved</p>
                   </div>
                 </div>
               </div>
@@ -330,8 +312,8 @@ export default function AlertsPage() {
                 <div className="flex items-center">
                   <AlertTriangle className="w-8 h-8 text-red-400" />
                   <div className="ml-4">
-                    <p className="text-2xl font-bold text-red-400">{stats.unread_alerts}</p>
-                    <p className="text-green-300/70 text-sm">Unread</p>
+                    <p className="text-2xl font-bold text-red-400">{stats.total_unresolved}</p>
+                    <p className="text-green-300/70 text-sm">Active Alerts</p>
                   </div>
                 </div>
               </div>
@@ -340,7 +322,7 @@ export default function AlertsPage() {
                 <div className="flex items-center">
                   <Clock className="w-8 h-8 text-orange-400" />
                   <div className="ml-4">
-                    <p className="text-2xl font-bold text-orange-400">{stats.recent_alerts_24h}</p>
+                    <p className="text-2xl font-bold text-orange-400">{stats.recent_24h}</p>
                     <p className="text-green-300/70 text-sm">Last 24h</p>
                   </div>
                 </div>
@@ -350,7 +332,7 @@ export default function AlertsPage() {
                 <div className="flex items-center">
                   <TrendingUp className="w-8 h-8 text-green-400" />
                   <div className="ml-4">
-                    <p className="text-2xl font-bold text-green-400">{stats.level_breakdown?.CRITICAL || 0}</p>
+                    <p className="text-2xl font-bold text-green-400">{stats.severity_breakdown?.critical || 0}</p>
                     <p className="text-green-300/70 text-sm">Critical</p>
                   </div>
                 </div>
@@ -408,16 +390,16 @@ export default function AlertsPage() {
               {filteredAlerts.length > 0 ? (
                 <div className="space-y-4">
                   {filteredAlerts.map((alert) => {
-                    const severityColorClass = getSeverityColor(alert.level);
+                    const severityColorClass = getSeverityColor(alert.severity);
                     return (
                       <div
                         key={alert.id}
                         className={`p-4 border-l-4 bg-gray-900/80 rounded-r-lg hover:bg-gray-800/50 transition-colors cursor-pointer ${
-                          alert.level.toUpperCase() === "CRITICAL"
+                          alert.severity.toUpperCase() === "CRITICAL"
                             ? "border-l-red-500"
-                            : alert.level.toUpperCase() === "HIGH"
+                            : alert.severity.toUpperCase() === "HIGH"
                             ? "border-l-orange-500"
-                            : alert.level.toUpperCase() === "MEDIUM"
+                            : alert.severity.toUpperCase() === "MEDIUM"
                             ? "border-l-yellow-500"
                             : "border-l-blue-500"
                         }`}
@@ -427,30 +409,26 @@ export default function AlertsPage() {
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <span className={`px-2 py-1 rounded text-xs font-medium ${severityColorClass} border`}>
-                                {getSeverityIcon(alert.level)}
-                                <span className="ml-1">{alert.level.toUpperCase()}</span>
+                                {getSeverityIcon(alert.severity)}
+                                <span className="ml-1">{alert.severity.toUpperCase()}</span>
                               </span>
                               <span className="text-green-300/70 text-sm">
                                 {alert.time || new Date(alert.detected_at).toLocaleString()}
                               </span>
-                              {!alert.is_read && !alert.read && (
-                                <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                              )}
+                              {alert.status === "new" && <span className="w-2 h-2 bg-red-500 rounded-full"></span>}
                             </div>
 
-                            <h4 className="font-semibold text-green-300 mb-2">{alert.title || alert.message}</h4>
+                            <h4 className="font-semibold text-green-300 mb-2">{alert.title}</h4>
 
-                            {alert.message && alert.title && (
-                              <p className="text-green-300/80 text-sm mb-3">{alert.message}</p>
-                            )}
+                            {alert.description && <p className="text-green-300/80 text-sm mb-3">{alert.description}</p>}
 
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                              {(alert.source || alert.source_ip) && (
+                              {alert.source_ip && (
                                 <div>
                                   <p className="text-green-400/70 font-medium">Source IP</p>
                                   <p className="text-green-300 flex items-center">
                                     <MapPin className="w-3 h-3 mr-1" />
-                                    {alert.source || alert.source_ip}
+                                    {alert.source_ip}
                                   </p>
                                 </div>
                               )}
@@ -466,20 +444,18 @@ export default function AlertsPage() {
                                   <p className="text-green-300">{alert.target_port}</p>
                                 </div>
                               )}
-                              {(alert.confidence || alert.confidence_score) && (
+                              {alert.confidence_score && (
                                 <div>
                                   <p className="text-green-400/70 font-medium">Confidence</p>
-                                  <p className="text-green-300">
-                                    {((alert.confidence || alert.confidence_score) * 100).toFixed(1)}%
-                                  </p>
+                                  <p className="text-green-300">{(alert.confidence_score * 10).toFixed(1)}%</p>
                                 </div>
                               )}
                             </div>
 
-                            {(alert.detection_method || alert.attack_type) && (
+                            {alert.detection_method && (
                               <div className="mt-2">
                                 <span className="text-xs bg-green-500/10 text-green-400 border border-green-500/30 px-2 py-1 rounded">
-                                  {alert.detection_method || alert.attack_type}
+                                  {alert.detection_method}
                                 </span>
                               </div>
                             )}
@@ -494,7 +470,7 @@ export default function AlertsPage() {
                           </div>
 
                           <div className="flex flex-col items-center gap-2 ml-4">
-                            {!(alert.is_read || alert.read) && (
+                            {alert.status === "new" && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

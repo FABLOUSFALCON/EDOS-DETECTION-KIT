@@ -43,6 +43,7 @@ from app.api import (
     supabase_auth,
     websockets,
     live_monitoring,
+    alerts_new,
 )
 from app.realtime_manager import get_realtime_manager
 from app.supabase_client import get_supabase_client
@@ -92,22 +93,22 @@ async def lifespan(app: FastAPI):
             f"⚠️ Database initialization error: {e}, falling back to mock data"
         )
 
+    # Start ML processor for Redis stream processing
+    logger.info("🤖 Starting ML processor for alerts generation...")
+    try:
+        from app.services.ml_processor import start_ml_processor
+
+        ml_processor_task = asyncio.create_task(start_ml_processor())
+        logger.info("✅ ML processor started successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to start ML processor: {e}")
+        ml_processor_task = None
+
     # Start real-time monitoring for Supabase changes (instead of dummy data generation)
     if settings.use_supabase:
         background_task = asyncio.create_task(monitor_supabase_changes())
     else:
         logger.info("⚠️ Real-time monitoring disabled - Supabase not configured")
-
-    # Start Redis Streams consumer for ML predictions if Redis is configured
-    if settings.REDIS_URL:
-        try:
-            from app.services.redis_consumer import start_consumer_task
-
-            logger.info("🔁 Starting Redis Streams consumer for ML predictions...")
-            consumer_task = asyncio.create_task(start_consumer_task(app))
-            app.state._redis_consumer_task = consumer_task
-        except Exception as e:
-            logger.warning(f"Failed to start Redis consumer: {e}")
 
     yield
 
@@ -115,13 +116,8 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Shutting down EDoS Security Dashboard Backend")
     if "background_task" in locals():
         background_task.cancel()
-    # Cancel Redis consumer if running
-    try:
-        task = getattr(app.state, "_redis_consumer_task", None)
-        if task is not None:
-            task.cancel()
-    except Exception:
-        pass
+    if "ml_processor_task" in locals() and ml_processor_task:
+        ml_processor_task.cancel()
 
 
 async def setup_supabase_subscriptions():
@@ -180,6 +176,7 @@ security = HTTPBearer()
 # Include API routers
 app.include_router(supabase_auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
+app.include_router(alerts_new.router, prefix="/api/alerts-new", tags=["New Alerts API"])
 app.include_router(network.router, prefix="/api/network", tags=["Network"])
 app.include_router(resources.router, prefix="/api/resources", tags=["Resources"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
