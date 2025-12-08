@@ -5,18 +5,37 @@ import { Terminal, Wifi, WifiOff, Pause, Play } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { AuthGuard } from "@/components/auth-guard";
 
-interface JSONLog {
+interface MLPrediction {
+  is_attack: boolean;
+  confidence: number;
+  attack_probability: number;
+  model_version?: string;
+  flow_id?: string;
+  client_id?: string;
+  resource_id?: string;
+}
+
+interface PredictionLog {
   id: string;
   timestamp: Date;
-  rawJSON: string;
+  predictions: MLPrediction[];
+  source: string;
+  client_id: string;
+  resource_id: string;
+  processing_time_ms?: number;
 }
 
 export default function MonitorPage() {
-  const [jsonLogs, setJsonLogs] = useState<JSONLog[]>([]);
+  const [predictionLogs, setPredictionLogs] = useState<PredictionLog[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [messageCount, setMessageCount] = useState(0);
+  const [stats, setStats] = useState({
+    totalPredictions: 0,
+    attackCount: 0,
+    benignCount: 0,
+    avgConfidence: 0,
+  });
 
   const terminalRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -27,6 +46,24 @@ export default function MonitorPage() {
     if (terminalRef.current && !isPaused) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
+  };
+
+  // Update statistics
+  const updateStats = (newPredictions: MLPrediction[]) => {
+    setStats((prev) => {
+      const attackCount = newPredictions.filter((p) => p.is_attack).length;
+      const benignCount = newPredictions.length - attackCount;
+      const avgConf = newPredictions.reduce((sum, p) => sum + p.confidence, 0) / newPredictions.length;
+
+      return {
+        totalPredictions: prev.totalPredictions + newPredictions.length,
+        attackCount: prev.attackCount + attackCount,
+        benignCount: prev.benignCount + benignCount,
+        avgConfidence:
+          (prev.avgConfidence * prev.totalPredictions + avgConf * newPredictions.length) /
+          (prev.totalPredictions + newPredictions.length),
+      };
+    });
   };
 
   // WebSocket connection to backend
@@ -56,23 +93,40 @@ export default function MonitorPage() {
             return;
           }
 
-          // Get the raw JSON from the msg field - this is what's stored in Redis
-          const redisJSON = rawData.msg;
-          if (redisJSON) {
-            const newLog: JSONLog = {
-              id: rawData.message_id || Date.now().toString(),
+          // Parse the actual message from Redis (it's in the 'msg' field)
+          let actualData;
+          if (rawData.msg) {
+            actualData = JSON.parse(rawData.msg);
+          } else {
+            actualData = rawData;
+          }
+
+          console.log("📊 Parsed prediction data:", actualData);
+
+          // Extract predictions from batch_results or direct predictions
+          const predictions = actualData.batch_results?.predictions || actualData.predictions || [];
+          
+          // Add each individual prediction as a separate log entry
+          predictions.forEach((prediction: MLPrediction, index: number) => {
+            const newLog: PredictionLog = {
+              id: `${actualData.message_id || Date.now()}-${index}`,
               timestamp: new Date(),
-              rawJSON: redisJSON,
+              predictions: [prediction],
+              source: actualData.source || "ml-pipeline",
+              client_id: actualData.client_id || "unknown",
+              resource_id: actualData.resource_id || "unknown",
+              processing_time_ms: actualData.batch_results?.statistics?.processing_time_ms,
             };
 
-            setJsonLogs((prev) => {
+            setPredictionLogs((prev) => {
               const updated = [...prev, newLog];
               return updated.slice(-maxLogs); // Keep only recent logs
             });
 
-            setMessageCount((prev) => prev + 1);
-            setTimeout(scrollToBottom, 50);
-          }
+            updateStats([prediction]);
+          });
+
+          setTimeout(scrollToBottom, 100);
         } catch (error) {
           console.error("❌ Failed to parse WebSocket message:", error);
         }
@@ -108,6 +162,24 @@ export default function MonitorPage() {
       }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const formatTimestamp = (date: Date) => {
+    return date.toLocaleTimeString() + "." + date.getMilliseconds().toString().padStart(3, "0");
+  };
+
+  const getPredictionColor = (prediction: MLPrediction) => {
+    if (prediction.is_attack) {
+      return prediction.confidence > 0.8 ? "text-red-400" : "text-orange-400";
+    }
+    return prediction.confidence > 0.8 ? "text-green-400" : "text-blue-400";
+  };
+
+  const getPredictionIcon = (prediction: MLPrediction) => {
+    if (prediction.is_attack) {
+      return prediction.confidence > 0.8 ? "🔴" : "🟡";
+    }
+    return prediction.confidence > 0.8 ? "🟢" : "🔵";
+  };
 
   const togglePause = () => {
     setIsPaused(!isPaused);
@@ -151,9 +223,11 @@ export default function MonitorPage() {
                 {/* Stats */}
                 <div className="text-right text-sm">
                   <div className="text-green-300">
-                    Messages: {messageCount} |<span className="text-blue-400 ml-1">Redis Stream</span>
+                    Total: {stats.totalPredictions} |
+                    <span className="text-red-400 ml-1">Attacks: {stats.attackCount}</span> |
+                    <span className="text-green-400 ml-1">Benign: {stats.benignCount}</span>
                   </div>
-                  <div className="text-green-300/70">Raw JSON Flow</div>
+                  <div className="text-green-300/70">Avg Confidence: {(stats.avgConfidence * 100).toFixed(1)}%</div>
                 </div>
               </div>
             </div>
@@ -170,25 +244,36 @@ export default function MonitorPage() {
             className="flex-1 overflow-y-auto p-4 space-y-1 bg-black"
             style={{ fontFamily: 'Monaco, "Lucida Console", monospace' }}
           >
-            {jsonLogs.length === 0 ? (
+            {predictionLogs.length === 0 ? (
               <div className="text-center py-8 text-green-300/50">
                 <Terminal className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p>Waiting for ML predictions...</p>
                 <p className="text-sm mt-2">{isConnected ? "Connected to Redis stream" : "Connecting to backend..."}</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {jsonLogs.map((log) => (
-                  <div key={log.id} className="font-mono text-sm">
-                    <div className="text-green-400 opacity-80 leading-relaxed whitespace-pre-wrap break-all">
-                      {log.rawJSON}
+              predictionLogs.map((log) => (
+                <div key={log.id} className="py-1">
+                  {/* Pure Prediction Display */}
+                  {log.predictions.map((prediction, predIndex) => (
+                    <div key={predIndex} className={`${getPredictionColor(prediction)} leading-tight`}>
+                      <span className="mr-2">{getPredictionIcon(prediction)}</span>
+                      <span className="font-semibold">
+                        {prediction.is_attack ? "ATTACK" : "BENIGN"}
+                      </span>
+                      <span className="text-white/60 ml-3">
+                        conf: {(prediction.confidence * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-white/40 ml-3">
+                        prob: {(prediction.attack_probability * 100).toFixed(1)}%
+                      </span>
+                      <span className="text-gray-500 ml-3 text-xs">
+                        {formatTimestamp(log.timestamp)}
+                      </span>
                     </div>
-                    <div className="text-gray-600 text-xs mt-1 mb-3">
-                      {log.timestamp.toLocaleTimeString()}.{log.timestamp.getMilliseconds().toString().padStart(3, "0")}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ))
+            )
             )}
           </div>
 
@@ -196,8 +281,8 @@ export default function MonitorPage() {
           <div className="border-t border-green-500/30 p-2 bg-gray-900/50 text-sm text-green-300/70">
             <div className="flex justify-between items-center">
               <span>
-                {isPaused ? "⏸️ Stream Paused" : "▶️ Live Stream"} | Showing last {Math.min(jsonLogs.length, maxLogs)}{" "}
-                messages
+                {isPaused ? "⏸️ Stream Paused" : "▶️ Live Stream"} | Showing last{" "}
+                {Math.min(predictionLogs.length, maxLogs)} predictions
               </span>
               <span>{isConnected ? "🟢 Redis WebSocket Active" : "🔴 Disconnected"}</span>
             </div>
