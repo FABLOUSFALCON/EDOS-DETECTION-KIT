@@ -3,6 +3,7 @@ Database Models for EDoS Security Dashboard
 Professional SQLAlchemy models with proper relationships
 """
 
+import uuid
 from sqlalchemy import (
     Column,
     String,
@@ -19,12 +20,73 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID, INET, ARRAY
 from sqlalchemy.sql import func
+from sqlalchemy.types import TypeDecorator, CHAR
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 import uuid
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel
+
+
+# Database-agnostic UUID type
+class UUID(TypeDecorator):
+    """Platform-independent UUID type.
+    Uses PostgreSQL's UUID type, otherwise uses CHAR(36).
+    """
+
+    impl = CHAR
+    cache_ok = True
+
+    def __init__(self, as_uuid=False):
+        self.as_uuid = as_uuid
+        super().__init__()
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=self.as_uuid))
+        else:
+            return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        elif dialect.name == "postgresql":
+            return str(value) if not self.as_uuid else value
+        else:
+            if not isinstance(value, uuid.UUID):
+                return str(value)
+            else:
+                return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        else:
+            if self.as_uuid and not isinstance(value, uuid.UUID):
+                return uuid.UUID(value)
+            elif not self.as_uuid:
+                return str(value)
+            return value
+
+
+# Database-agnostic IP address type
+class IPAddress(TypeDecorator):
+    """Platform-independent IP address type.
+    Uses PostgreSQL's INET type, otherwise uses VARCHAR(45).
+    """
+
+    impl = String(45)
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            from sqlalchemy.dialects.postgresql import INET
+
+            return dialect.type_descriptor(INET())
+        else:
+            return dialect.type_descriptor(String(45))
+
 
 Base = declarative_base()
 
@@ -67,28 +129,40 @@ class UserProfile(Base):
     )
     deleted_at = Column(DateTime(timezone=True))  # Soft delete
 
-    # Relationships - temporarily simplified for debugging
-    # resources = relationship(
-    #     "UserResource",
-    #     back_populates="user",
-    #     cascade="all, delete-orphan",
-    #     foreign_keys="[UserResource.user_id]",
-    # )
-    # alerts = relationship(
-    #     "SecurityAlert",
-    #     back_populates="user",
-    #     cascade="all, delete-orphan",
-    #     foreign_keys="[SecurityAlert.user_id]",
-    # )
-    # sessions = relationship(
-    #     "UserSession", back_populates="user", cascade="all, delete-orphan"
-    # )
-    # settings = relationship(
-    #     "UserSettings",
-    #     back_populates="user",
-    #     uselist=False,
-    #     cascade="all, delete-orphan",
-    # )
+    # Relationships
+    resources = relationship(
+        "UserResource",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="[UserResource.user_id]",
+    )
+    sessions = relationship(
+        "UserSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    settings = relationship(
+        "UserSettings",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    alerts = relationship(
+        "SecurityAlert",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="[SecurityAlert.user_id]",
+    )
+    logs = relationship(
+        "SystemLog",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="[SystemLog.user_id]",
+    )
+    metrics = relationship(
+        "SystemMetric",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="[SystemMetric.user_id]",
+    )
 
 
 class UserSession(Base):
@@ -96,16 +170,18 @@ class UserSession(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False,
     )
     token_hash = Column(String(255), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
-    ip_address = Column(INET)
+    ip_address = Column(IPAddress())
     user_agent = Column(Text)
     created_at = Column(DateTime(timezone=True), default=func.now())
 
     # Relationships
-    user = relationship("User", back_populates="sessions")
+    user = relationship("UserProfile", back_populates="sessions")
 
 
 class UserSettings(Base):
@@ -113,7 +189,9 @@ class UserSettings(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False,
     )
 
     # Security settings
@@ -138,7 +216,7 @@ class UserSettings(Base):
     )
 
     # Relationships
-    user = relationship("User", back_populates="settings")
+    user = relationship("UserProfile", back_populates="settings")
 
 
 # =============================================
@@ -184,7 +262,7 @@ class UserResource(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -224,8 +302,8 @@ class UserResource(Base):
     monthly_cost_estimate = Column(DECIMAL(10, 2))
 
     # Network configuration
-    private_ip = Column(INET)
-    public_ip = Column(INET)
+    private_ip = Column(IPAddress())
+    public_ip = Column(IPAddress())
     vpc_id = Column(String(255))
     subnet_id = Column(String(255))
     security_groups = Column(JSON)  # Array of security group IDs
@@ -242,7 +320,7 @@ class UserResource(Base):
     deleted_at = Column(DateTime(timezone=True))
 
     # Relationships
-    user = relationship("User", back_populates="resources")
+    user = relationship("UserProfile", back_populates="resources")
     resource_type = relationship("ResourceType", back_populates="resources")
     alerts = relationship("SecurityAlert", back_populates="resource")
     logs = relationship("SystemLog", back_populates="resource")
@@ -263,7 +341,7 @@ class SecurityAlert(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -283,12 +361,12 @@ class SecurityAlert(Base):
     description = Column(Text, nullable=False)
 
     # Source information
-    source_ip = Column(INET, index=True)
+    source_ip = Column(IPAddress(), index=True)
     source_country = Column(String(2))
     source_city = Column(String(100))
 
     # Target information
-    target_ip = Column(INET)
+    target_ip = Column(IPAddress())
     target_port = Column(Integer)
     target_service = Column(String(100))
 
@@ -304,7 +382,7 @@ class SecurityAlert(Base):
 
     # Response and status
     status = Column(String(20), default="new", index=True)
-    assigned_to = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    assigned_to = Column(UUID(as_uuid=True), ForeignKey("user_profiles.id"))
     resolution_notes = Column(Text)
 
     # Metadata
@@ -318,8 +396,8 @@ class SecurityAlert(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
 
     # Relationships
-    user = relationship("User", back_populates="alerts", foreign_keys=[user_id])
-    assigned_user = relationship("User", foreign_keys=[assigned_to])
+    user = relationship("UserProfile", back_populates="alerts", foreign_keys=[user_id])
+    assigned_user = relationship("UserProfile", foreign_keys=[assigned_to])
     resource = relationship("UserResource", back_populates="alerts")
 
     # Constraints
@@ -344,7 +422,7 @@ class NetworkTraffic(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -353,12 +431,12 @@ class NetworkTraffic(Base):
     )
 
     # Traffic flow
-    source_ip = Column(INET, nullable=False, index=True)
+    source_ip = Column(IPAddress(), nullable=False, index=True)
     source_port = Column(Integer)
     source_country = Column(String(2))
     source_city = Column(String(100))
 
-    destination_ip = Column(INET, nullable=False)
+    destination_ip = Column(IPAddress(), nullable=False)
     destination_port = Column(Integer)
     destination_country = Column(String(2))
     destination_city = Column(String(100))
@@ -398,7 +476,7 @@ class SystemLog(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -430,7 +508,7 @@ class SystemLog(Base):
     ingested_at = Column(DateTime(timezone=True), default=func.now())
 
     # Relationships
-    user = relationship("User")
+    user = relationship("UserProfile", back_populates="logs")
     resource = relationship("UserResource", back_populates="logs")
 
 
@@ -439,7 +517,9 @@ class SystemMetric(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True),
+        ForeignKey("user_profiles.id", ondelete="CASCADE"),
+        nullable=False,
     )
     resource_id = Column(
         UUID(as_uuid=True),
@@ -478,7 +558,7 @@ class SystemMetric(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
 
     # Relationships
-    user = relationship("User")
+    user = relationship("UserProfile", back_populates="metrics")
     resource = relationship("UserResource", back_populates="metrics")
 
     # Composite index for time-series queries
