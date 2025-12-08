@@ -36,6 +36,7 @@ from app.core.config import settings
 from app.api import (
     alerts,
     network,
+    network_analysis,
     resources,
     metrics,
     logs,
@@ -178,6 +179,9 @@ app.include_router(supabase_auth.router, prefix="/api/auth", tags=["Authenticati
 app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
 app.include_router(alerts_new.router, prefix="/api/alerts-new", tags=["New Alerts API"])
 app.include_router(network.router, prefix="/api/network", tags=["Network"])
+app.include_router(
+    network_analysis.router, prefix="/api/network-analysis", tags=["Network Analysis"]
+)
 app.include_router(resources.router, prefix="/api/resources", tags=["Resources"])
 app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
 app.include_router(logs.router, prefix="/api/logs", tags=["Logs"])

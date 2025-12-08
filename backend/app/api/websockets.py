@@ -468,3 +468,86 @@ async def websocket_ml_predictions(websocket: WebSocket):
     except Exception as e:
         logger.error(f"ML WebSocket error: {e}")
         ml_manager.disconnect(websocket)
+
+
+@router.websocket("/network-analysis")
+async def websocket_network_analysis(websocket: WebSocket):
+    """WebSocket endpoint for real-time network analysis data"""
+    import redis.asyncio as aioredis
+
+    await websocket.accept()
+    logger.info("🌐 Network analysis WebSocket connected")
+
+    # Connect to Redis
+    redis_client = None
+    try:
+        redis_client = aioredis.from_url(
+            "redis://localhost:6379", decode_responses=True
+        )
+        await redis_client.ping()
+        logger.info("✅ Connected to Redis for network analysis")
+    except Exception as e:
+        logger.error(f"❌ Failed to connect to Redis: {e}")
+        await websocket.close(code=4000, reason="Redis connection failed")
+        return
+
+    try:
+        while True:
+            try:
+                # Get latest network analysis data from Redis
+                data = await redis_client.get("network_analysis:latest")
+
+                if data:
+                    # Parse and send the data
+                    network_data = json.loads(data)
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "network_analysis",
+                                "data": network_data,
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
+                    )
+                    logger.debug("📡 Sent network analysis data to WebSocket")
+                else:
+                    # Send empty data if no Redis data available
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "network_analysis",
+                                "data": None,
+                                "error": "No data available",
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
+                    )
+
+                # Wait 2 seconds before next update (same as the Python service)
+                await asyncio.sleep(2)
+
+            except json.JSONDecodeError as e:
+                logger.error(f"❌ JSON decode error: {e}")
+                await websocket.send_text(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "message": "Invalid data format",
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
+                )
+                await asyncio.sleep(5)
+
+            except Exception as e:
+                logger.error(f"❌ Error in network analysis loop: {e}")
+                await asyncio.sleep(5)
+
+    except WebSocketDisconnect:
+        logger.info("🔌 Network analysis WebSocket disconnected")
+    except Exception as e:
+        logger.error(f"💥 Network analysis WebSocket error: {e}")
+    finally:
+        if redis_client:
+            await redis_client.close()
+            logger.info("🔒 Redis connection closed")
