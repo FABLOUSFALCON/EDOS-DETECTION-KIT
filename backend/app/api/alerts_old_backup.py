@@ -26,13 +26,13 @@ async def get_alerts(
     read: Optional[bool] = Query(None, description="Filter by read status"),
     limit: int = Query(50, description="Maximum number of alerts to return"),
     offset: int = Query(0, description="Pagination offset"),
-    # current_user: UserProfile = Depends(get_current_user),  # Temporarily disabled for debugging
+    current_user: UserProfile = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get security alerts from database (generated from Redis ML predictions)"""
     try:
-        # Query all alerts for now (user filtering temporarily disabled)
-        query = db.query(SecurityAlert)
+        # Query alerts for current user
+        query = db.query(SecurityAlert).filter(SecurityAlert.user_id == current_user.id)
 
         # Apply filters
         if level:
@@ -88,40 +88,13 @@ async def get_alerts(
 
     except Exception as e:
         logger.error(f"Error fetching alerts: {e}")
-        import traceback
-
-        traceback.print_exc()
-
-        # Return mock data for development
-        from datetime import datetime
-
-        return [
-            {
-                "id": "dev-alert-1",
-                "level": "MEDIUM",
-                "message": "Development: Database temporarily unavailable. Showing mock alert.",
-                "source": "127.0.0.1",
-                "timestamp": datetime.utcnow().isoformat(),
-                "time": "12/08 06:30",
-                "read": False,
-                "title": "Mock Alert - Database Not Connected",
-                "category": "development",
-                "confidence": 0.85,
-                "target_ip": "192.168.1.100",
-                "target_port": 80,
-                "detection_method": "Development Mode",
-                "severity": "medium",
-                "status": "new",
-                "detected_at": datetime.utcnow().isoformat(),
-                "attack_type": "development",
-            }
-        ]
+        raise HTTPException(status_code=500, detail="Failed to fetch alerts")
 
 
 @router.get("/stats")
 async def get_alert_stats(
     hours: int = Query(24, description="Hours to look back for stats"),
-    # current_user: UserProfile = Depends(get_current_user),  # Temporarily disabled
+    current_user: UserProfile = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get alert statistics for dashboard"""
@@ -129,18 +102,29 @@ async def get_alert_stats(
         # Time range for recent alerts
         time_threshold = datetime.utcnow() - timedelta(hours=hours)
 
-        # Total alerts (no user filter for development)
-        total_alerts = db.query(SecurityAlert).count()
+        # Total alerts
+        total_alerts = (
+            db.query(SecurityAlert)
+            .filter(SecurityAlert.user_id == current_user.id)
+            .count()
+        )
 
         # Unread alerts
         unread_alerts = (
-            db.query(SecurityAlert).filter(SecurityAlert.status == "new").count()
+            db.query(SecurityAlert)
+            .filter(
+                SecurityAlert.user_id == current_user.id, SecurityAlert.status == "new"
+            )
+            .count()
         )
 
         # Recent alerts
         recent_alerts = (
             db.query(SecurityAlert)
-            .filter(SecurityAlert.detected_at >= time_threshold)
+            .filter(
+                SecurityAlert.user_id == current_user.id,
+                SecurityAlert.detected_at >= time_threshold,
+            )
             .count()
         )
 
@@ -148,6 +132,7 @@ async def get_alert_stats(
         severity_breakdown = {}
         severity_counts = (
             db.query(SecurityAlert.severity, func.count(SecurityAlert.id))
+            .filter(SecurityAlert.user_id == current_user.id)
             .group_by(SecurityAlert.severity)
             .all()
         )
@@ -165,14 +150,7 @@ async def get_alert_stats(
 
     except Exception as e:
         logger.error(f"Error fetching alert stats: {e}")
-        # Return mock stats for development
-        return {
-            "total_alerts": 1,
-            "unread_alerts": 1,
-            f"recent_alerts_{hours}h": 1,
-            "level_breakdown": {"MEDIUM": 1},
-            "timestamp": datetime.utcnow().isoformat(),
-        }
+        raise HTTPException(status_code=500, detail="Failed to fetch alert statistics")
 
 
 @router.patch("/{alert_id}/read")

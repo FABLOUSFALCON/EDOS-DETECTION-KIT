@@ -147,18 +147,27 @@ async def process_message(redis: aioredis.Redis, entry_id: str, msg: Dict[str, A
         try:
             # Try ORM-based insert if models align
             with get_db_context() as db:
+                # NEW INVERTED LOGIC SEVERITY CALCULATION
+                # Lower attack_probability = higher confidence it's an attack
                 severity = "low"
                 try:
                     conf = float(prediction.get("confidence", 0.0))
-                    prob = float(prediction.get("attack_probability", 0.0))
-                    if conf >= 0.9 and prob >= 0.8:
+                    attack_prob = float(prediction.get("attack_probability", 1.0))
+                    
+                    # Inverted logic: LOW attack_probability indicates HIGH attack confidence
+                    # Convert to attack confidence: lower prob = higher confidence
+                    attack_confidence = 1.0 - attack_prob
+                    
+                    if attack_confidence >= 0.8 and conf >= 0.8:  # Very high confidence
                         severity = "critical"
-                    elif conf >= 0.8 and prob >= 0.6:
+                    elif attack_confidence >= 0.6 and conf >= 0.6:  # High confidence
                         severity = "high"
-                    elif conf >= 0.6 and prob >= 0.4:
+                    elif attack_confidence >= 0.4 and conf >= 0.4:  # Medium confidence
                         severity = "medium"
+                    else:
+                        severity = "low"
                 except Exception:
-                    severity = "low"
+                    severity = "medium"  # Default to medium for attacks
 
                 alert = SecurityAlert(
                     user_id=user_id,
@@ -239,15 +248,25 @@ async def process_message(redis: aioredis.Redis, entry_id: str, msg: Dict[str, A
                         }
                     )
 
+                    # NEW INVERTED LOGIC SEVERITY CALCULATION (Raw SQL)
                     severity = "low"
                     try:
                         conf = float(prediction.get("confidence", 0.0))
-                        prob = float(prediction.get("attack_probability", 0.0))
-                        if conf >= 0.9 and prob >= 0.8:
+                        attack_prob = float(prediction.get("attack_probability", 1.0))
+                        
+                        # Inverted logic: LOW attack_probability indicates HIGH attack confidence
+                        attack_confidence = 1.0 - attack_prob
+                        
+                        if attack_confidence >= 0.8 and conf >= 0.8:
                             severity = "critical"
-                        elif conf >= 0.8 and prob >= 0.6:
+                        elif attack_confidence >= 0.6 and conf >= 0.6:
                             severity = "high"
-                        elif conf >= 0.6 and prob >= 0.4:
+                        elif attack_confidence >= 0.4 and conf >= 0.4:
+                            severity = "medium"
+                        else:
+                            severity = "low"
+                    except Exception:
+                        severity = "medium"
                             severity = "medium"
                     except Exception:
                         severity = "low"

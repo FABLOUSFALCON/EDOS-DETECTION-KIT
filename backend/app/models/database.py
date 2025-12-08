@@ -67,28 +67,28 @@ class UserProfile(Base):
     )
     deleted_at = Column(DateTime(timezone=True))  # Soft delete
 
-    # Relationships
-    resources = relationship(
-        "UserResource",
-        back_populates="user",
-        cascade="all, delete-orphan",
-        foreign_keys="[UserResource.user_id]",
-    )
-    alerts = relationship(
-        "SecurityAlert",
-        back_populates="user",
-        cascade="all, delete-orphan",
-        foreign_keys="[SecurityAlert.user_id]",
-    )
-    sessions = relationship(
-        "UserSession", back_populates="user", cascade="all, delete-orphan"
-    )
-    settings = relationship(
-        "UserSettings",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
+    # Relationships - temporarily simplified for debugging
+    # resources = relationship(
+    #     "UserResource",
+    #     back_populates="user",
+    #     cascade="all, delete-orphan",
+    #     foreign_keys="[UserResource.user_id]",
+    # )
+    # alerts = relationship(
+    #     "SecurityAlert",
+    #     back_populates="user",
+    #     cascade="all, delete-orphan",
+    #     foreign_keys="[SecurityAlert.user_id]",
+    # )
+    # sessions = relationship(
+    #     "UserSession", back_populates="user", cascade="all, delete-orphan"
+    # )
+    # settings = relationship(
+    #     "UserSettings",
+    #     back_populates="user",
+    #     uselist=False,
+    #     cascade="all, delete-orphan",
+    # )
 
 
 class UserSession(Base):
