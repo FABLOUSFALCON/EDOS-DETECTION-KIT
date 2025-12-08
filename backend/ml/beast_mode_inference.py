@@ -22,8 +22,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Decision threshold used to convert probabilities to boolean decisions
-# Lowered to be more sensitive for early DDOS detection as requested.
-DECISION_THRESHOLD = 0.02
+# INVERTED LOGIC: If attack_probability < threshold, classify as attack
+# Set to 0.50 - values below this are considered attacks
+DECISION_THRESHOLD = 0.022
 
 
 class BeastModeInferenceEngine:
@@ -245,11 +246,24 @@ class BeastModeInferenceEngine:
             attack_probs = final_probabilities[:, 1]  # Attack probabilities
             benign_probs = final_probabilities[:, 0]  # Benign probabilities
 
+            # Debug logging for probability analysis
+            if len(attack_probs) > 0:
+                avg_attack_prob = float(np.mean(attack_probs))
+                max_attack_prob = float(np.max(attack_probs))
+                min_attack_prob = float(np.min(attack_probs))
+                attacks_detected = int(np.sum(attack_probs < DECISION_THRESHOLD))
+
+                logger.info(
+                    f"📊 Batch Analysis: {len(attack_probs)} flows | "
+                    f"Attack Prob: avg={avg_attack_prob:.4f}, max={max_attack_prob:.4f}, min={min_attack_prob:.4f} | "
+                    f"Attacks Detected: {attacks_detected}/{len(attack_probs)} (INVERTED: prob < {DECISION_THRESHOLD})"
+                )
+
             # Step 5: Vectorized result construction
             predictions = []
             for i in range(batch_size):
                 result = {
-                    "is_attack": bool(attack_probs[i] > DECISION_THRESHOLD),
+                    "is_attack": bool(attack_probs[i] < DECISION_THRESHOLD),
                     "attack_probability": float(attack_probs[i]),
                     "benign_probability": float(benign_probs[i]),
                     "confidence": float(max(attack_probs[i], benign_probs[i])),
