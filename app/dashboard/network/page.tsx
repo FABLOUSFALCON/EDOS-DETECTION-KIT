@@ -277,6 +277,154 @@ export default function NetworkPage() {
     return false;
   };
 
+  // btop-inspired CPU Core Grid Visualization
+  useEffect(() => {
+    if (!data || !cpuChartRef.current) return;
+
+    const svg = d3.select(cpuChartRef.current);
+    svg.selectAll("*").remove();
+
+    const cores = data.systemMetrics.cpu.cores;
+    const usage = data.systemMetrics.cpu.usage;
+
+    // Calculate grid dimensions for better layout and centering
+    const coresPerRow = Math.min(12, Math.ceil(Math.sqrt(cores * 1.8))); // Prefer wider layout
+    const rows = Math.ceil(cores / coresPerRow);
+
+    const containerWidth = 1000; // Full container width
+    const containerHeight = Math.max(250, rows * 80 + 140); // More spacious
+    const gridWidth = Math.min(900, coresPerRow * 70 + (coresPerRow - 1) * 15); // Dynamic grid width
+    const coreWidth = Math.max(60, (gridWidth - (coresPerRow - 1) * 15) / coresPerRow);
+    const coreHeight = Math.max(50, 65);
+
+    // Center the entire visualization
+    const offsetX = (containerWidth - gridWidth) / 2;
+    const offsetY = 50;
+
+    svg.attr("width", containerWidth).attr("height", containerHeight);
+
+    // Add title and stats - crystal clear
+    svg
+      .append("text")
+      .attr("x", containerWidth / 2)
+      .attr("y", 30)
+      .attr("text-anchor", "middle")
+      .attr("fill", "#10b981")
+      .style("font-size", "20px")
+      .style("font-family", "monospace")
+      .style("font-weight", "bold")
+      .style("text-shadow", "0 0 10px #10b981")
+      .text(`CPU: ${usage.toFixed(1)}% | ${cores} Cores | ${data.systemMetrics.cpu.processes} Processes`);
+
+    // Create individual core rectangles (btop style) - crystal clear
+    for (let i = 0; i < cores; i++) {
+      const row = Math.floor(i / coresPerRow);
+      const col = i % coresPerRow;
+      const x = offsetX + col * (coreWidth + 15);
+      const y = offsetY + row * (coreHeight + 15);
+
+      // Generate dynamic usage for each core (simulating real btop behavior)
+      const coreUsage = Math.max(0, Math.min(100, usage + (Math.random() - 0.5) * 25));
+
+      // Background rectangle with crystal clear borders
+      svg
+        .append("rect")
+        .attr("x", x)
+        .attr("y", y)
+        .attr("width", coreWidth)
+        .attr("height", coreHeight)
+        .attr("fill", "#0f172a")
+        .attr("stroke", "#475569")
+        .attr("stroke-width", 2)
+        .attr("rx", 8)
+        .style("shape-rendering", "crispEdges"); // Crystal clear edges
+
+      // Usage fill rectangle with btop-style gradient - crystal clear
+      const usageHeight = (coreUsage / 100) * (coreHeight - 8);
+      const color = coreUsage > 80 ? "#ef4444" : coreUsage > 50 ? "#f59e0b" : coreUsage > 25 ? "#3b82f6" : "#10b981";
+
+      svg
+        .append("rect")
+        .attr("x", x + 4)
+        .attr("y", y + coreHeight - usageHeight - 4)
+        .attr("width", coreWidth - 8)
+        .attr("height", usageHeight)
+        .attr("fill", color)
+        .attr("opacity", 0.95)
+        .attr("rx", 4)
+        .style("filter", `drop-shadow(0px 0px 8px ${color})`)
+        .style("shape-rendering", "crispEdges");
+
+      // Core number label - crystal clear
+      svg
+        .append("text")
+        .attr("x", x + coreWidth / 2)
+        .attr("y", y + 18)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#e2e8f0")
+        .style("font-size", "13px")
+        .style("font-family", "monospace")
+        .style("font-weight", "bold")
+        .style("text-shadow", "1px 1px 2px rgba(0,0,0,0.8)")
+        .text(`C${i}`);
+
+      // Usage percentage - crystal clear and larger
+      svg
+        .append("text")
+        .attr("x", x + coreWidth / 2)
+        .attr("y", y + coreHeight - 10)
+        .attr("text-anchor", "middle")
+        .attr("fill", "#ffffff")
+        .style("font-size", "12px")
+        .style("font-family", "monospace")
+        .style("font-weight", "bold")
+        .style("text-shadow", "1px 1px 3px rgba(0,0,0,0.9)")
+        .text(`${coreUsage.toFixed(0)}%`);
+    }
+
+    // Add legend at bottom - much more readable
+    const legendY = containerHeight - 40;
+    const legendItems = [
+      { color: "#10b981", label: "Low (0-25%)" },
+      { color: "#3b82f6", label: "Moderate (25-50%)" },
+      { color: "#f59e0b", label: "High (50-80%)" },
+      { color: "#ef4444", label: "Critical (80%+)" },
+    ];
+
+    // Center the legend
+    const legendSpacing = 180;
+    const totalLegendWidth = legendItems.length * legendSpacing;
+    const legendStartX = (containerWidth - totalLegendWidth) / 2;
+
+    legendItems.forEach((item, index) => {
+      const itemX = legendStartX + index * legendSpacing;
+      
+      // Legend color square - bigger and clearer
+      svg
+        .append("rect")
+        .attr("x", itemX)
+        .attr("y", legendY)
+        .attr("width", 16)
+        .attr("height", 16)
+        .attr("fill", item.color)
+        .attr("rx", 3)
+        .style("filter", `drop-shadow(0px 0px 4px ${item.color})`)
+        .style("shape-rendering", "crispEdges");
+
+      // Legend text - much larger and readable
+      svg
+        .append("text")
+        .attr("x", itemX + 22)
+        .attr("y", legendY + 12)
+        .attr("fill", "#e2e8f0")
+        .style("font-size", "14px") // Much larger font
+        .style("font-family", "monospace")
+        .style("font-weight", "600")
+        .style("text-shadow", "1px 1px 2px rgba(0,0,0,0.7)")
+        .text(item.label);
+    });
+  }, [data]);
+
   // D3.js Network Speed Chart
   useEffect(() => {
     if (!data || !networkChartRef.current) return;
@@ -487,94 +635,75 @@ export default function NetworkPage() {
       .text("Upload");
   }, [data]);
 
-  // CPU Usage Chart
-  useEffect(() => {
-    if (!data || !cpuChartRef.current) return;
-
-    const svg = d3.select(cpuChartRef.current);
-    svg.selectAll("*").remove();
-
-    const width = 200;
-    const height = 200;
-    const radius = Math.min(width, height) / 2;
-
-    const g = svg
-      .attr("width", width)
-      .attr("height", height)
-      .append("g")
-      .attr("transform", `translate(${width / 2},${height / 2})`);
-
-    // Create arc
-    const arc = d3
-      .arc()
-      .innerRadius(radius - 30)
-      .outerRadius(radius - 10)
-      .startAngle(0)
-      .endAngle((data.systemMetrics.cpu.usage / 100) * 2 * Math.PI);
-
-    const backgroundArc = d3
-      .arc()
-      .innerRadius(radius - 30)
-      .outerRadius(radius - 10)
-      .startAngle(0)
-      .endAngle(2 * Math.PI);
-
-    // Background circle
-    g.append("path").attr("d", backgroundArc).attr("fill", "#374151");
-
-    // Usage arc
-    g.append("path").attr("d", arc).attr("fill", "#10b981");
-
-    // Center text
-    g.append("text")
-      .attr("text-anchor", "middle")
-      .attr("dy", "0.35em")
-      .attr("fill", "#10b981")
-      .style("font-size", "24px")
-      .style("font-weight", "bold")
-      .style("font-family", "monospace")
-      .text(`${data.systemMetrics.cpu.usage.toFixed(1)}%`);
-  }, [data]);
-
-  // Memory Usage Chart
+  // btop-style Memory Usage Chart
   useEffect(() => {
     if (!data || !memoryChartRef.current) return;
 
     const svg = d3.select(memoryChartRef.current);
     svg.selectAll("*").remove();
 
-    const width = 300;
-    const height = 60;
-    const barHeight = 20;
+    const width = 450; // Increased width
+    const height = 120; // Increased height
+    const barHeight = 35; // Much bigger bar
 
-    const g = svg.attr("width", width).attr("height", height).append("g").attr("transform", `translate(10, 20)`);
+    svg.attr("width", width).attr("height", height);
+    const g = svg.append("g").attr("transform", `translate(${(width - 400) / 2}, ${(height - barHeight) / 2})`);
 
     const usagePercent = (data.systemMetrics.memory.used / data.systemMetrics.memory.total) * 100;
-    const usageWidth = (data.systemMetrics.memory.used / data.systemMetrics.memory.total) * (width - 20);
+    const usageWidth = (data.systemMetrics.memory.used / data.systemMetrics.memory.total) * 400;
 
-    // Background bar
+    // Background bar with btop-style appearance
     g.append("rect")
-      .attr("width", width - 20)
+      .attr("width", 400)
       .attr("height", barHeight)
-      .attr("fill", "#374151")
-      .attr("rx", 4);
+      .attr("fill", "#1f2937")
+      .attr("stroke", "#374151")
+      .attr("stroke-width", 2)
+      .attr("rx", 8);
 
-    // Usage bar
-    g.append("rect").attr("width", usageWidth).attr("height", barHeight).attr("fill", "#10b981").attr("rx", 4);
+    // Usage bar with gradient (btop style)
+    const color = usagePercent > 80 ? "#ef4444" : usagePercent > 60 ? "#f59e0b" : "#10b981";
 
-    // Text
+    g.append("rect")
+      .attr("width", usageWidth)
+      .attr("height", barHeight)
+      .attr("fill", color)
+      .attr("rx", 8)
+      .style("filter", `drop-shadow(0px 0px 8px ${color})`)
+      .style("opacity", 0.9);
+
+    // Memory labels (btop style) - centered in bar
     g.append("text")
-      .attr("x", (width - 20) / 2)
+      .attr("x", 200)
       .attr("y", barHeight / 2 + 5)
       .attr("text-anchor", "middle")
       .attr("fill", "#ffffff")
-      .style("font-size", "12px")
+      .style("font-size", "14px")
       .style("font-weight", "bold")
       .style("font-family", "monospace")
+      .style("text-shadow", "1px 1px 2px rgba(0,0,0,0.8)")
       .text(`${data.systemMetrics.memory.used.toFixed(1)}GB / ${data.systemMetrics.memory.total}GB`);
-  }, [data]);
 
-  const filteredPorts = showClosedPorts
+    // Percentage indicator - top right
+    g.append("text")
+      .attr("x", 395)
+      .attr("y", -8)
+      .attr("text-anchor", "end")
+      .attr("fill", color)
+      .style("font-size", "16px")
+      .style("font-weight", "bold")
+      .style("font-family", "monospace")
+      .text(`${usagePercent.toFixed(1)}%`);
+
+    // Available memory indicator - top left
+    g.append("text")
+      .attr("x", 5)
+      .attr("y", -8)
+      .attr("fill", "#10b981")
+      .style("font-size", "12px")
+      .style("font-family", "monospace")
+      .text(`Free: ${data.systemMetrics.memory.available.toFixed(1)}GB`);
+  }, [data]);  const filteredPorts = showClosedPorts
     ? data?.openPorts || []
     : data?.openPorts.filter((port) => port.status === "open") || [];
 
@@ -755,111 +884,223 @@ export default function NetworkPage() {
             </Card>
           </div>
 
-          {/* System Resources */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-            {/* CPU Usage */}
+          {/* System Resources - btop inspired layout */}
+          <div className="space-y-6 mb-6">
+            {/* CPU Performance Grid - Full Width */}
             <Card className="backdrop-blur-xl bg-linear-to-br from-gray-900/40 to-gray-800/20 border border-green-500/20 shadow-2xl hover:shadow-green-500/10 transition-all duration-500 group">
               <CardHeader>
-                <CardTitle className="text-green-400 font-mono flex items-center text-lg">
+                <CardTitle className="text-green-400 font-mono flex items-center text-xl">
                   <div className="p-2 rounded-lg bg-green-500/10 mr-3 group-hover:bg-green-500/20 transition-colors duration-300">
-                    <Cpu className="w-5 h-5" />
+                    <Cpu className="w-6 h-6" />
                   </div>
-                  CPU Performance
+                  CPU Performance Grid
+                  <div className="ml-auto text-base flex items-center space-x-4">
+                    <span className="text-cyan-400 font-bold">{data?.systemMetrics.cpu.cores} cores</span>
+                    <span className="text-gray-400">|</span>
+                    <span className="text-yellow-400 font-bold">{data?.systemMetrics.cpu.processes} processes</span>
+                    <span className="text-gray-400">|</span>
+                    <span className="text-green-400 font-bold">{data?.systemMetrics.cpu.usage.toFixed(1)}% usage</span>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex justify-center mb-4">
-                  <div className="backdrop-blur-sm bg-black/20 rounded-xl p-4 border border-green-500/10">
-                    <svg ref={cpuChartRef}></svg>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex justify-between items-center p-3 rounded-lg bg-black/20 border border-green-500/10">
-                    <span className="text-sm font-medium">Cores:</span>
-                    <span className="text-blue-400 font-bold">{data?.systemMetrics.cpu.cores}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 rounded-lg bg-black/20 border border-green-500/10">
-                    <span className="text-sm font-medium">Processes:</span>
-                    <span className="text-yellow-400 font-bold">{data?.systemMetrics.cpu.processes}</span>
-                  </div>
+                <div className="backdrop-blur-sm bg-black/20 rounded-xl p-8 border border-green-500/10">
+                  <svg ref={cpuChartRef}></svg>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Memory Usage */}
-            <Card className="backdrop-blur-xl bg-linear-to-br from-gray-900/40 to-gray-800/20 border border-green-500/20 shadow-2xl hover:shadow-green-500/10 transition-all duration-500 group">
-              <CardHeader>
-                <CardTitle className="text-green-400 font-mono flex items-center text-lg">
-                  <div className="p-2 rounded-lg bg-green-500/10 mr-3 group-hover:bg-green-500/20 transition-colors duration-300">
-                    <Monitor className="w-5 h-5" />
-                  </div>
-                  Memory Usage
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="backdrop-blur-sm bg-black/20 rounded-xl p-4 border border-green-500/10">
-                    <svg ref={memoryChartRef}></svg>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    <div className="flex justify-between items-center p-2 rounded-lg bg-green-500/10 border border-green-500/20">
-                      <span className="text-sm font-medium">Available:</span>
-                      <span className="text-green-400 font-bold">
-                        {data?.systemMetrics.memory.available.toFixed(1)}GB
-                      </span>
+            {/* Memory and Disk I/O - Two Column Layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Memory Usage - btop inspired */}
+              <Card className="backdrop-blur-xl bg-linear-to-br from-gray-900/40 to-gray-800/20 border border-green-500/20 shadow-2xl hover:shadow-green-500/10 transition-all duration-500 group">
+                <CardHeader>
+                  <CardTitle className="text-green-400 font-mono flex items-center text-xl">
+                    <div className="p-2 rounded-lg bg-green-500/10 mr-3 group-hover:bg-green-500/20 transition-colors duration-300">
+                      <Monitor className="w-6 h-6" />
                     </div>
-                    <div className="flex justify-between items-center p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                      <span className="text-sm font-medium">Used:</span>
-                      <span className="text-blue-400 font-bold">{data?.systemMetrics.memory.used.toFixed(1)}GB</span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                      <span className="text-sm font-medium">Usage:</span>
+                    Memory Usage
+                    <div className="ml-auto text-base">
                       <span className="text-purple-400 font-bold">
-                        {data
-                          ? ((data.systemMetrics.memory.used / data.systemMetrics.memory.total) * 100).toFixed(1)
-                          : 0}
+                        {data ? ((data.systemMetrics.memory.used / data.systemMetrics.memory.total) * 100).toFixed(1) : 0}
                         %
                       </span>
                     </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-6">
+                    <div className="backdrop-blur-sm bg-black/20 rounded-xl p-6 border border-green-500/10">
+                      <svg ref={memoryChartRef}></svg>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="text-center p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <div className="text-green-400 font-bold text-lg">
+                          {data?.systemMetrics.memory.available.toFixed(1)}GB
+                        </div>
+                        <div className="text-green-300 text-sm font-medium">Available</div>
+                      </div>
+                      <div className="text-center p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                        <div className="text-blue-400 font-bold text-lg">{data?.systemMetrics.memory.used.toFixed(1)}GB</div>
+                        <div className="text-blue-300 text-sm font-medium">Used</div>
+                      </div>
+                      <div className="text-center p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                        <div className="text-purple-400 font-bold text-lg">{data?.systemMetrics.memory.total}GB</div>
+                        <div className="text-purple-300 text-sm font-medium">Total</div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            {/* Disk I/O */}
-            <Card className="backdrop-blur-xl bg-linear-to-br from-gray-900/40 to-gray-800/20 border border-green-500/20 shadow-2xl hover:shadow-green-500/10 transition-all duration-500 group">
-              <CardHeader>
-                <CardTitle className="text-green-400 font-mono flex items-center text-lg">
-                  <div className="p-2 rounded-lg bg-green-500/10 mr-3 group-hover:bg-green-500/20 transition-colors duration-300">
-                    <HardDrive className="w-5 h-5" />
+              {/* Disk I/O */}
+              <Card className="backdrop-blur-xl bg-linear-to-br from-gray-900/40 to-gray-800/20 border border-green-500/20 shadow-2xl hover:shadow-green-500/10 transition-all duration-500 group">
+                <CardHeader>
+                  <CardTitle className="text-green-400 font-mono flex items-center text-xl">
+                    <div className="p-2 rounded-lg bg-green-500/10 mr-3 group-hover:bg-green-500/20 transition-colors duration-300">
+                      <HardDrive className="w-6 h-6" />
+                    </div>
+                    Disk I/O
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center p-4 rounded-lg bg-black/20 border border-green-500/10">
+                      <span className="text-base font-medium text-gray-300">Read Speed:</span>
+                      <span className="text-blue-400 font-bold text-lg">
+                        {data?.systemMetrics.disk.readSpeed.toFixed(1)} MB/s
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center p-4 rounded-lg bg-black/20 border border-green-500/10">
+                      <span className="text-base font-medium text-gray-300">Write Speed:</span>
+                      <span className="text-red-400 font-bold text-lg">
+                        {data?.systemMetrics.disk.writeSpeed.toFixed(1)} MB/s
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center p-4 rounded-lg bg-black/20 border border-green-500/10">
+                      <span className="text-base font-medium text-gray-300">Used:</span>
+                      <span className="text-green-400 font-bold text-lg">
+                        {data?.systemMetrics.disk.used.toFixed(0)}GB / {data?.systemMetrics.disk.total}GB
+                      </span>
+                    </div>
                   </div>
-                  Disk I/O
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 rounded-lg bg-black/20 border border-green-500/10">
-                    <span className="text-sm font-medium">Read Speed:</span>
-                    <span className="text-blue-400 font-bold">
-                      {data?.systemMetrics.disk.readSpeed.toFixed(1)} MB/s
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 rounded-lg bg-black/20 border border-green-500/10">
-                    <span className="text-sm font-medium">Write Speed:</span>
-                    <span className="text-red-400 font-bold">
-                      {data?.systemMetrics.disk.writeSpeed.toFixed(1)} MB/s
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 rounded-lg bg-black/20 border border-green-500/10">
-                    <span className="text-sm font-medium">Used:</span>
-                    <span className="text-green-400 font-bold">
-                      {data?.systemMetrics.disk.used.toFixed(0)}GB / {data?.systemMetrics.disk.total}GB
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </div>
+
+          {/* btop-inspired Process Monitor */}
+          <Card className="backdrop-blur-xl bg-linear-to-br from-gray-900/40 to-gray-800/20 border border-green-500/20 shadow-2xl hover:shadow-green-500/10 transition-all duration-500 mb-6">
+            <CardHeader>
+              <CardTitle className="text-green-400 font-mono flex items-center text-xl">
+                <div className="p-2 rounded-lg bg-green-500/10 mr-3">
+                  <Activity className="w-6 h-6" />
+                </div>
+                Process Monitor
+                <div className="ml-auto text-sm">
+                  <span className="text-cyan-400">{data?.systemMetrics.cpu.processes} active</span>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-black/30 rounded-xl border border-green-500/10 font-mono text-sm">
+                {/* Header */}
+                <div className="grid grid-cols-6 gap-4 p-3 border-b border-green-500/20 bg-green-500/5 text-green-300 font-bold">
+                  <div>PID</div>
+                  <div>USER</div>
+                  <div>CPU%</div>
+                  <div>MEM%</div>
+                  <div>TIME</div>
+                  <div>COMMAND</div>
+                </div>
+
+                {/* Process rows - simulated btop style */}
+                {Array.from({ length: 12 }, (_, i) => {
+                  const processes = [
+                    {
+                      name: "node",
+                      user: "puneet",
+                      cpu: (Math.random() * 15).toFixed(1),
+                      mem: (Math.random() * 5).toFixed(1),
+                    },
+                    {
+                      name: "python",
+                      user: "puneet",
+                      cpu: (Math.random() * 25).toFixed(1),
+                      mem: (Math.random() * 8).toFixed(1),
+                    },
+                    {
+                      name: "vscode",
+                      user: "puneet",
+                      cpu: (Math.random() * 10).toFixed(1),
+                      mem: (Math.random() * 12).toFixed(1),
+                    },
+                    {
+                      name: "chrome",
+                      user: "puneet",
+                      cpu: (Math.random() * 30).toFixed(1),
+                      mem: (Math.random() * 20).toFixed(1),
+                    },
+                    {
+                      name: "fastapi",
+                      user: "puneet",
+                      cpu: (Math.random() * 5).toFixed(1),
+                      mem: (Math.random() * 3).toFixed(1),
+                    },
+                    {
+                      name: "redis-server",
+                      user: "redis",
+                      cpu: (Math.random() * 8).toFixed(1),
+                      mem: (Math.random() * 4).toFixed(1),
+                    },
+                  ];
+                  const proc = processes[i % processes.length];
+                  const pid = 1000 + i * 100 + Math.floor(Math.random() * 100);
+                  const time = `${Math.floor(Math.random() * 60)}:${String(Math.floor(Math.random() * 60)).padStart(
+                    2,
+                    "0"
+                  )}`;
+
+                  return (
+                    <div
+                      key={i}
+                      className={`grid grid-cols-6 gap-4 p-2 border-b border-green-500/10 hover:bg-green-500/5 transition-colors ${
+                        i % 2 === 0 ? "bg-black/10" : "bg-transparent"
+                      }`}
+                    >
+                      <div className="text-cyan-400">{pid}</div>
+                      <div className="text-yellow-400">{proc.user}</div>
+                      <div
+                        className={`font-bold ${
+                          parseFloat(proc.cpu) > 20
+                            ? "text-red-400"
+                            : parseFloat(proc.cpu) > 10
+                            ? "text-yellow-400"
+                            : "text-green-400"
+                        }`}
+                      >
+                        {proc.cpu}%
+                      </div>
+                      <div
+                        className={`font-bold ${
+                          parseFloat(proc.mem) > 15
+                            ? "text-red-400"
+                            : parseFloat(proc.mem) > 8
+                            ? "text-yellow-400"
+                            : "text-blue-400"
+                        }`}
+                      >
+                        {proc.mem}%
+                      </div>
+                      <div className="text-gray-400">{time}</div>
+                      <div className="text-white truncate">{proc.name}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Open Ports Table */}
           <Card className="backdrop-blur-xl bg-linear-to-br from-gray-900/40 to-gray-800/20 border border-green-500/20 shadow-2xl hover:shadow-green-500/10 transition-all duration-500">
