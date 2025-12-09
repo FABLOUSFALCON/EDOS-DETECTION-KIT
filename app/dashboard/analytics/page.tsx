@@ -521,7 +521,7 @@ function AnalyticsContent() {
       {alertStats && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="relative overflow-hidden bg-card/40 backdrop-blur-md border-primary/20 hover:border-primary/40 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent"></div>
+            <div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent"></div>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-sm font-medium font-mono text-muted-foreground">Total Threats</CardTitle>
               <Shield className="h-6 w-6 text-primary animate-pulse" />
@@ -537,7 +537,7 @@ function AnalyticsContent() {
           </Card>
 
           <Card className="relative overflow-hidden bg-card/40 backdrop-blur-md border-red-500/20 hover:border-red-500/40 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent"></div>
+            <div className="absolute inset-0 bg-linear-to-br from-red-500/5 to-transparent"></div>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-sm font-medium font-mono text-muted-foreground">Critical Alerts</CardTitle>
               <AlertTriangle className="h-6 w-6 text-red-400 animate-bounce" />
@@ -551,7 +551,7 @@ function AnalyticsContent() {
           </Card>
 
           <Card className="relative overflow-hidden bg-card/40 backdrop-blur-md border-primary/20 hover:border-primary/40 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent"></div>
+            <div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent"></div>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-sm font-medium font-mono text-muted-foreground">Response Rate</CardTitle>
               <Target className="h-6 w-6 text-primary" />
@@ -565,7 +565,7 @@ function AnalyticsContent() {
           </Card>
 
           <Card className="relative overflow-hidden bg-card/40 backdrop-blur-md border-primary/20 hover:border-primary/40 transition-all duration-300">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent"></div>
+            <div className="absolute inset-0 bg-linear-to-br from-primary/5 to-transparent"></div>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
               <CardTitle className="text-sm font-medium font-mono text-muted-foreground">ML Accuracy</CardTitle>
               <Brain className="h-6 w-6 text-primary animate-pulse" />
@@ -583,8 +583,8 @@ function AnalyticsContent() {
       {/* Enhanced Charts Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {/* Threat Severity Analysis */}
-        <Card className="relative overflow-hidden bg-card/20 backdrop-blur-xl border-primary/20">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/3 to-transparent"></div>
+        <Card className="relative overflow-hidden bg-card/40 backdrop-blur-md border-primary/20">
+          <div className="absolute inset-0 bg-linear-to-br from-primary/3 to-transparent"></div>
           <CardHeader className="relative">
             <CardTitle className="flex items-center font-mono text-primary text-xl">
               <BarChart3 className="h-7 w-7 mr-3 text-primary" />
@@ -600,7 +600,7 @@ function AnalyticsContent() {
 
         {/* Real-Time Timeline */}
         <Card className="relative overflow-hidden bg-card/20 backdrop-blur-xl border-primary/20">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/3 to-transparent"></div>
+          <div className="absolute inset-0 bg-linear-to-br from-primary/3 to-transparent"></div>
           <CardHeader className="relative">
             <CardTitle className="flex items-center font-mono text-primary text-xl">
               <Activity className="h-7 w-7 mr-3 text-primary" />
