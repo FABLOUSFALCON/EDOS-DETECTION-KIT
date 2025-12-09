@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
 
+/* Terminal Theme CSS Variables */
 :root {
   --background: #0a0a0a;
   --foreground: #00ff00;
@@ -25,35 +26,35 @@
   --radius: 0.25rem;
 }
 
-@layer base {
-  * {
-    border-color: #333333;
-  }
+/* Base Styles */
+* {
+  border-color: #333333;
+}
 
-  body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: "JetBrains Mono", "Monaco", "Consolas", monospace;
-  }
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: "JetBrains Mono", "Monaco", "Consolas", monospace;
+}
 
-  .terminal-cursor::after {
-    content: "█";
-    animation: blink 1s infinite;
-  }
+/* Terminal Effects */
+.terminal-cursor::after {
+  content: "█";
+  animation: blink 1s infinite;
+}
 
-  @keyframes blink {
-    0%,
-    50% {
-      opacity: 1;
-    }
-    51%,
-    100% {
-      opacity: 0;
-    }
+@keyframes blink {
+  0%,
+  50% {
+    opacity: 1;
   }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
 
-  .terminal-text {
-    font-family: "JetBrains Mono", "Monaco", "Consolas", monospace;
-    text-shadow: 0 0 5px currentColor;
-  }
+.terminal-text {
+  font-family: "JetBrains Mono", "Monaco", "Consolas", monospace;
+  text-shadow: 0 0 5px currentColor;
 }
