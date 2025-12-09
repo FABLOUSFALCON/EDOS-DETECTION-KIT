@@ -45,7 +45,7 @@ interface AlertStats {
 
 // Professional color scheme matching your green terminal theme
 const CHART_COLORS = {
-  primary: "#00ff00", // Your exact green color
+  primary: "#27d77a", // Your exact green color
   primaryGlass: "rgba(0, 255, 0, 0.1)",
   primaryBorder: "rgba(0, 255, 0, 0.3)",
   critical: "#ff4444",
@@ -54,12 +54,12 @@ const CHART_COLORS = {
   highGlass: "rgba(255, 136, 0, 0.1)",
   medium: "#ffaa00",
   mediumGlass: "rgba(255, 170, 0, 0.1)",
-  low: "#00ff00", // Using your green for low severity
+  low: "#27d77a", // Using your green for low severity
   lowGlass: "rgba(0, 255, 0, 0.1)",
   background: "#0a0a0a",
   cardBackground: "rgba(17, 17, 17, 0.8)",
   border: "#333333",
-  text: "#00ff00",
+  text: "#27d77a",
   mutedText: "#666666",
 };
 

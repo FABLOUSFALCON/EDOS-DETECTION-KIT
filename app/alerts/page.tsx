@@ -100,7 +100,7 @@ const STATUS_COLORS = {
   new: "bg-red-100 text-red-800",
   acknowledged: "bg-yellow-100 text-yellow-800",
   investigating: "bg-blue-100 text-blue-800",
-  resolved: "bg-green-100 text-green-800",
+  resolved: "bg-[#27d77a]/20 text-[#27d77a]",
   false_positive: "bg-gray-100 text-gray-800",
 };
 
@@ -662,7 +662,7 @@ export default function AlertsPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-[#00ff00]">Security Alerts</h1>
+              <h1 className="text-3xl font-bold text-[#27d77a]">Security Alerts</h1>
               <p className="text-gray-400">Monitor and manage security incidents</p>
             </div>
             <div className="flex items-center gap-3">
@@ -670,8 +670,8 @@ export default function AlertsPage() {
                 onClick={() => setShowFilters(!showFilters)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
                   showFilters || filters.severity.length > 0 || filters.status.length > 0 || filters.search
-                    ? "bg-[#00ff00] text-black border-[#00ff00]"
-                    : "bg-[#111111] text-[#00ff00] border-[#333333] hover:bg-[#1a1a1a]"
+                    ? "bg-[#27d77a] text-black border-[#27d77a]"
+                    : "bg-[#111111] text-[#27d77a] border-[#333333] hover:bg-[#1a1a1a]"
                 }`}
               >
                 <Filter className="w-4 h-4" />
@@ -685,14 +685,14 @@ export default function AlertsPage() {
               <button
                 onClick={fetchAlerts}
                 disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2 bg-[#00ff00] text-black rounded-lg hover:bg-[#00cc00] disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-[#27d77a] text-black rounded-lg hover:bg-[#22c55e] disabled:opacity-50"
               >
                 <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
                 Refresh
               </button>
               <button
                 onClick={() => setShowKeyboardHelp(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-[#1a1a1a] text-[#00ff00] border border-[#333333] rounded-lg hover:bg-[#333333]"
+                className="flex items-center gap-2 px-4 py-2 bg-[#1a1a1a] text-[#27d77a] border border-[#333333] rounded-lg hover:bg-[#333333]"
                 title="Keyboard shortcuts (Ctrl+H)"
               >
                 ?
@@ -736,7 +736,7 @@ export default function AlertsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-400">Unresolved</p>
-                    <p className="text-2xl font-bold text-[#00ff00]">{stats.total_unresolved}</p>
+                    <p className="text-2xl font-bold text-[#27d77a]">{stats.total_unresolved}</p>
                   </div>
                   <AlertTriangle className="w-8 h-8 text-[#ff4444]" />
                 </div>
@@ -754,7 +754,7 @@ export default function AlertsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-400">Last 24h</p>
-                    <p className="text-2xl font-bold text-[#00ff00]">{stats.recent_24h}</p>
+                    <p className="text-2xl font-bold text-[#27d77a]">{stats.recent_24h}</p>
                   </div>
                   <Clock className="w-8 h-8 text-[#00ff00]" />
                 </div>

@@ -4,24 +4,24 @@
 /* Terminal Theme CSS Variables */
 :root {
   --background: #0a0a0a;
-  --foreground: #00ff00;
+  --foreground: #27d77a;
   --card: #111111;
-  --card-foreground: #00ff00;
+  --card-foreground: #27d77a;
   --popover: #111111;
-  --popover-foreground: #00ff00;
-  --primary: #00ff00;
+  --popover-foreground: #27d77a;
+  --primary: #27d77a;
   --primary-foreground: #000000;
   --secondary: #1a1a1a;
-  --secondary-foreground: #00ff00;
+  --secondary-foreground: #27d77a;
   --muted: #1a1a1a;
   --muted-foreground: #666666;
   --accent: #1a1a1a;
-  --accent-foreground: #00ff00;
+  --accent-foreground: #27d77a;
   --destructive: #ff4444;
   --destructive-foreground: #ffffff;
   --border: #333333;
   --input: #1a1a1a;
-  --ring: #00ff00;
+  --ring: #27d77a;
   --radius: 0.25rem;
 }
 
