@@ -494,6 +494,13 @@ async def websocket_network_analysis(websocket: WebSocket):
     try:
         while True:
             try:
+                # Check if WebSocket is still connected before sending
+                if websocket.client_state.name == "DISCONNECTED":
+                    logger.info(
+                        "🔌 Network analysis WebSocket disconnected, breaking loop"
+                    )
+                    break
+
                 # Get latest network analysis data from Redis
                 data = await redis_client.get("network_analysis:latest")
 
@@ -528,20 +535,26 @@ async def websocket_network_analysis(websocket: WebSocket):
 
             except json.JSONDecodeError as e:
                 logger.error(f"❌ JSON decode error: {e}")
-                await websocket.send_text(
-                    json.dumps(
-                        {
-                            "type": "error",
-                            "message": "Invalid data format",
-                            "timestamp": datetime.now().isoformat(),
-                        }
+                if websocket.client_state.name != "DISCONNECTED":
+                    await websocket.send_text(
+                        json.dumps(
+                            {
+                                "type": "error",
+                                "message": "Invalid data format",
+                                "timestamp": datetime.now().isoformat(),
+                            }
+                        )
                     )
-                )
                 await asyncio.sleep(5)
 
             except Exception as e:
                 logger.error(f"❌ Error in network analysis loop: {e}")
-                await asyncio.sleep(5)
+                # Don't try to send if connection is closed
+                if "send" not in str(e) and "close" not in str(e):
+                    await asyncio.sleep(5)
+                else:
+                    logger.info("🔌 WebSocket connection closed, breaking loop")
+                    break
 
     except WebSocketDisconnect:
         logger.info("🔌 Network analysis WebSocket disconnected")
@@ -551,3 +564,60 @@ async def websocket_network_analysis(websocket: WebSocket):
         if redis_client:
             await redis_client.close()
             logger.info("🔒 Redis connection closed")
+
+
+@router.websocket("/threat_map/{resource_id}")
+async def websocket_threat_map(websocket: WebSocket, resource_id: str):
+    """WebSocket endpoint for resource-specific real-time threat map updates"""
+
+    from ..core.websocket_manager import websocket_manager
+
+    try:
+        # Connect to resource-specific channel
+        resource_channel = f"threat_map_{resource_id}"
+        await websocket_manager.connect(websocket, resource_channel)
+        logger.info(
+            f"🌍 Client connected to threat map WebSocket for resource: {resource_id}"
+        )
+
+        # Send initial connection confirmation
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "connection_established",
+                    "message": "Connected to threat map updates",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
+        )
+
+        # Keep connection alive and handle incoming messages
+        while True:
+            try:
+                # Wait for any incoming messages from client
+                data = await websocket.receive_text()
+                message = json.loads(data)
+
+                # Handle different message types if needed
+                if message.get("type") == "ping":
+                    await websocket.send_text(
+                        json.dumps(
+                            {"type": "pong", "timestamp": datetime.utcnow().isoformat()}
+                        )
+                    )
+
+            except WebSocketDisconnect:
+                break
+            except Exception as e:
+                logger.error(f"❌ Error handling threat map message: {e}")
+                break
+
+    except WebSocketDisconnect:
+        logger.info(f"🌍 Threat map WebSocket disconnected for resource: {resource_id}")
+    except Exception as e:
+        logger.error(f"💥 Threat map WebSocket error for resource {resource_id}: {e}")
+    finally:
+        websocket_manager.disconnect(websocket, resource_channel)
+        logger.info(
+            f"🌍 Threat map WebSocket connection closed for resource: {resource_id}"
+        )

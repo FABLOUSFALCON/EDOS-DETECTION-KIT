@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "@fontsource/jetbrains-mono";
 import "./simple.css";
 import { AuthProvider } from "@/components/auth-context";
+import { ResourceProvider } from "@/components/resource-context";
 import { TwentyFirstToolbar } from "@21st-extension/toolbar-next";
 
 const geistSans = Geist({
@@ -33,7 +34,9 @@ export default function RootLayout({
             plugins: [], // Add your custom plugins here
           }}
         />
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ResourceProvider>{children}</ResourceProvider>
+        </AuthProvider>
       </body>
     </html>
   );

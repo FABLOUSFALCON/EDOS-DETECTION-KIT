@@ -85,7 +85,7 @@ export default function MonitorPage() {
           const redisJSON = rawData.msg;
           if (redisJSON) {
             const newLog: JSONLog = {
-              id: rawData.message_id || Date.now().toString(),
+              id: rawData.message_id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               timestamp: new Date(),
               rawJSON: redisJSON,
             };

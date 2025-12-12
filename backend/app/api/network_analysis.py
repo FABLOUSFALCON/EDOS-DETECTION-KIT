@@ -2,7 +2,7 @@
 Network Analysis API for real-time system monitoring
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 import redis.asyncio as aioredis
 import json
 import logging
@@ -17,6 +17,7 @@ router = APIRouter()
 
 @router.get("/latest")
 async def get_latest_network_analysis(
+    resource_id: str = Query(..., description="Resource ID to get data for"),
     current_user=Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Get the latest network analysis data from Redis"""
@@ -28,18 +29,21 @@ async def get_latest_network_analysis(
             "redis://localhost:6379", decode_responses=True
         )
 
-        # Get latest data
-        data = await redis_client.get("network_analysis:latest")
+        # Get latest data for specific resource
+        data = await redis_client.get(f"network_analysis:latest:{resource_id}")
 
         if not data:
             raise HTTPException(
-                status_code=404, detail="No network analysis data available"
+                status_code=404,
+                detail=f"No network analysis data available for resource {resource_id}",
             )
 
         # Parse JSON data
         network_data = json.loads(data)
 
-        logger.info(f"📊 Served network analysis data to user {current_user.id}")
+        logger.info(
+            f"📊 Served network analysis data for resource {resource_id} to user {current_user.id}"
+        )
 
         return {
             "success": True,

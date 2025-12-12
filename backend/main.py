@@ -44,10 +44,11 @@ from app.api import (
     supabase_auth,
     websockets,
     live_monitoring,
-    alerts_new,
+    network_events,
 )
 from app.realtime_manager import get_realtime_manager
 from app.supabase_client import get_supabase_client
+from app.services.network_processor import network_processor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -105,6 +106,17 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Failed to start ML processor: {e}")
         ml_processor_task = None
 
+    # Start network event processor for threat map
+    logger.info("🌍 Starting network event processor for threat map...")
+    try:
+        network_processor_task = asyncio.create_task(
+            network_processor.start_processing()
+        )
+        logger.info("✅ Network event processor started successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to start network event processor: {e}")
+        network_processor_task = None
+
     # Start real-time monitoring for Supabase changes (instead of dummy data generation)
     if settings.use_supabase:
         background_task = asyncio.create_task(monitor_supabase_changes())
@@ -119,6 +131,9 @@ async def lifespan(app: FastAPI):
         background_task.cancel()
     if "ml_processor_task" in locals() and ml_processor_task:
         ml_processor_task.cancel()
+    if "network_processor_task" in locals() and network_processor_task:
+        await network_processor.stop_processing()
+        network_processor_task.cancel()
 
 
 async def setup_supabase_subscriptions():
@@ -176,8 +191,7 @@ security = HTTPBearer()
 
 # Include API routers
 app.include_router(supabase_auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
-app.include_router(alerts_new.router, prefix="/api/alerts-new", tags=["New Alerts API"])
+app.include_router(alerts.router, prefix="/api/alerts-new", tags=["Alerts"])
 app.include_router(network.router, prefix="/api/network", tags=["Network"])
 app.include_router(
     network_analysis.router, prefix="/api/network-analysis", tags=["Network Analysis"]
@@ -190,6 +204,7 @@ app.include_router(websockets.router, prefix="/ws", tags=["WebSockets"])
 app.include_router(
     live_monitoring.router, prefix="/api/ml", tags=["ML Live Monitoring"]
 )
+app.include_router(network_events.router, tags=["Network Events"])
 
 
 # Health check

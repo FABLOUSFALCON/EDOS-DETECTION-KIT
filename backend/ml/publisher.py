@@ -10,6 +10,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 REDIS_STREAM = "ml:predictions"
+NETWORK_EVENTS_STREAM = "ml:network_events"
 
 
 async def publish_prediction(
@@ -83,4 +84,42 @@ async def publish_batch_results(
 
     except Exception as e:
         logger.exception(f"Failed to publish batch results to Redis: {e}")
+        return None
+
+
+async def publish_network_event(
+    source_ip: str,
+    is_attack: bool,
+    confidence: float,
+    flow_meta: Optional[dict] = None,
+) -> Optional[str]:
+    """Publish network event to dedicated threat map stream.
+
+    - `source_ip` is the IP address that generated the traffic
+    - `is_attack` indicates if this is classified as an attack
+    - `confidence` is the ML model confidence score (0.0-1.0)
+    - `flow_meta` contains additional flow metadata
+    - returns the Redis entry id or None on failure
+    """
+    try:
+        redis = aioredis.from_url(settings.REDIS_URL)
+
+        event = {
+            "ip": source_ip,
+            "is_attack": str(is_attack).lower(),
+            "confidence": str(confidence),
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "flow_meta": flow_meta or {},
+        }
+
+        # Publish to dedicated network events stream for threat map
+        entry_id = await redis.xadd(NETWORK_EVENTS_STREAM, event)
+        logger.debug(
+            f"Published network event to stream {NETWORK_EVENTS_STREAM} id={entry_id}"
+        )
+        await redis.close()
+        return entry_id
+
+    except Exception as e:
+        logger.exception(f"Failed to publish network event to Redis: {e}")
         return None

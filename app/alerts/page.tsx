@@ -105,7 +105,7 @@ const STATUS_COLORS = {
 };
 
 export default function AlertsPage() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [stats, setStats] = useState<AlertStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -174,7 +174,18 @@ export default function AlertsPage() {
   const fetchAlerts = useCallback(async () => {
     try {
       setRefreshing(true);
-      const response = await fetch(apiUrl);
+
+      // Check if we have a valid session token
+      if (!session?.access_token) {
+        console.log("🔒 No access token available, skipping alerts fetch");
+        return;
+      }
+
+      const response = await fetch(apiUrl, {
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -205,12 +216,22 @@ export default function AlertsPage() {
       setRefreshing(false);
       setLoading(false);
     }
-  }, [apiUrl]);
+  }, [apiUrl, session?.access_token]);
 
   // Fetch stats
   const fetchStats = useCallback(async () => {
     try {
-      const response = await fetch(`${baseUrl}/api/alerts-new/stats`);
+      // Check if we have a valid session token
+      if (!session?.access_token) {
+        console.log("🔒 No access token available, skipping stats fetch");
+        return;
+      }
+
+      const response = await fetch(`${baseUrl}/api/alerts-new/stats`, {
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
       if (response.ok) {
         const data: AlertStats = await response.json();
 
@@ -232,7 +253,7 @@ export default function AlertsPage() {
     } catch (error) {
       console.error("Failed to fetch stats:", error);
     }
-  }, [baseUrl, lastAlertCount]);
+  }, [baseUrl, lastAlertCount, session?.access_token]);
 
   // Select/deselect all alerts
   const toggleSelectAll = useCallback(() => {
@@ -252,6 +273,7 @@ export default function AlertsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
           alert_ids: Array.from(selectedAlerts),
@@ -269,7 +291,7 @@ export default function AlertsPage() {
     } catch (error) {
       console.error("Failed to bulk mark as read:", error);
     }
-  }, [selectedAlerts, baseUrl, user?.id, fetchAlerts, fetchStats]);
+  }, [selectedAlerts, baseUrl, user?.id, fetchAlerts, fetchStats, session?.access_token]);
 
   // Bulk resolve alerts
   const bulkResolveAlerts = useCallback(async () => {
@@ -280,6 +302,7 @@ export default function AlertsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
           alert_ids: Array.from(selectedAlerts),
@@ -297,7 +320,7 @@ export default function AlertsPage() {
     } catch (error) {
       console.error("Failed to bulk resolve alerts:", error);
     }
-  }, [selectedAlerts, baseUrl, user?.id, fetchAlerts, fetchStats]);
+  }, [selectedAlerts, baseUrl, user?.id, fetchAlerts, fetchStats, session?.access_token]);
 
   // Bulk delete alerts
   const bulkDeleteAlerts = useCallback(async () => {
@@ -317,6 +340,7 @@ export default function AlertsPage() {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
           alert_ids: Array.from(selectedAlerts),
@@ -332,7 +356,7 @@ export default function AlertsPage() {
     } catch (error) {
       console.error("Failed to bulk delete alerts:", error);
     }
-  }, [selectedAlerts, baseUrl, fetchAlerts, fetchStats]);
+  }, [selectedAlerts, baseUrl, fetchAlerts, fetchStats, session?.access_token]);
 
   // Effects
   useEffect(() => {
@@ -475,6 +499,7 @@ export default function AlertsPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
           status: "acknowledged",
@@ -498,6 +523,7 @@ export default function AlertsPage() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
           status: "resolved",
@@ -526,6 +552,7 @@ export default function AlertsPage() {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
           alert_ids: [alertId],
@@ -546,13 +573,19 @@ export default function AlertsPage() {
   const markAllAsRead = async () => {
     console.log("🔔 markAllAsRead clicked!");
     console.log("👤 Current user:", { id: user?.id, email: user?.email });
+    console.log("🔐 Session token available:", !!session?.access_token);
 
     if (!user?.id) {
       console.error("❌ No user ID found", { user });
       return;
     }
+
+    if (!session?.access_token) {
+      console.error("❌ No session token found");
+      return;
+    }
+
     console.log("📡 Making mark-all-read request with:", {
-      user_id: user.id,
       filters:
         filters.severity.length > 0 || filters.dateFrom || filters.dateTo
           ? {
@@ -568,9 +601,9 @@ export default function AlertsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          user_id: user.id,
           filters:
             filters.severity.length > 0 || filters.dateFrom || filters.dateTo
               ? {

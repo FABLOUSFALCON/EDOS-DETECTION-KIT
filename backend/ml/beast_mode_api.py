@@ -41,7 +41,7 @@ from collections import deque
 import asyncio
 
 # Redis publisher for predictions (minimal metadata only)
-from publisher import publish_prediction, publish_batch_results
+from publisher import publish_prediction, publish_batch_results, publish_network_event
 
 
 # Configure logging
@@ -795,6 +795,26 @@ async def predict_single_flow_ultra_fast(
                 )
             except Exception:
                 logger.debug("Failed to schedule publish to Redis")
+
+            # Publish network event for threat map (fire-and-forget)
+            try:
+                source_ip = flow_meta.get("src_ip")
+                if source_ip:
+                    is_attack = (
+                        result.get("prediction", 0) > 0.5
+                    )  # Threshold for attack
+                    confidence = float(result.get("prediction", 0.0))
+
+                    asyncio.create_task(
+                        publish_network_event(
+                            source_ip=source_ip,
+                            is_attack=is_attack,
+                            confidence=confidence,
+                            flow_meta=flow_meta,
+                        )
+                    )
+            except Exception:
+                logger.debug("Failed to schedule network event publish to Redis")
         except Exception:
             # Don't fail prediction on broadcast/publish errors
             logger.debug("Failed to broadcast or publish live prediction to clients")
@@ -919,6 +939,26 @@ async def predict_batch_ultra_high_throughput(
                     except Exception:
                         logger.debug(
                             "Failed to schedule publish to Redis for batch prediction"
+                        )
+
+                    # Publish network event for threat map (fire-and-forget)
+                    try:
+                        source_ip = flow_meta.get("src_ip")
+                        if source_ip:
+                            is_attack = pred.get("prediction", 0) > 0.5
+                            confidence = float(pred.get("prediction", 0.0))
+
+                            asyncio.create_task(
+                                publish_network_event(
+                                    source_ip=source_ip,
+                                    is_attack=is_attack,
+                                    confidence=confidence,
+                                    flow_meta=flow_meta,
+                                )
+                            )
+                    except Exception:
+                        logger.debug(
+                            "Failed to schedule network event publish for batch prediction"
                         )
         except Exception:
             logger.debug("Failed to broadcast batch predictions to live clients")

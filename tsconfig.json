@@ -28,7 +28,14 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    "**/*.mts",
+    "app/dashboard/network/page.tsx",
+    "app/dashboard/analytics/page.tsx",
+    "app/dashboard/analytics/page.tsx",
+    "app/dashboard/map/page.tsx",
+    "app/dashboard/monitor/page.tsx",
+    "app/alerts/page.tsx",
+    "app/dashboard/network/page.tsx"
   ],
   "exclude": ["node_modules"]
 }

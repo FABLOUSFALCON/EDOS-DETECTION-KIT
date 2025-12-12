@@ -14,13 +14,15 @@ class ConnectionManager:
     """Manages WebSocket connections for different channels"""
 
     def __init__(self):
-        # Store connections by channel type
+        # Store connections by channel type - now supports dynamic resource-specific channels
         self.active_connections: Dict[str, List[WebSocket]] = {
             "alerts": [],
             "metrics": [],
             "network_traffic": [],
             "logs": [],
+            "threat_map": [],  # Default threat map
         }
+        # Resource-specific channels will be created dynamically: threat_map_{resource_id}
 
     async def connect(self, websocket: WebSocket, channel: str):
         """Connect a client to a specific channel"""
@@ -46,7 +48,8 @@ class ConnectionManager:
     async def send_personal_message(self, message: str, websocket: WebSocket):
         """Send message to a specific client"""
         try:
-            await websocket.send_text(message)
+            if websocket.client_state.name != "DISCONNECTED":
+                await websocket.send_text(message)
         except Exception as e:
             logger.error(f"Error sending personal message: {e}")
 
@@ -60,7 +63,11 @@ class ConnectionManager:
 
         for connection in self.active_connections[channel]:
             try:
-                await connection.send_text(message)
+                # Check if connection is still active before sending
+                if connection.client_state.name != "DISCONNECTED":
+                    await connection.send_text(message)
+                else:
+                    disconnected_clients.append(connection)
             except Exception as e:
                 logger.error(f"Error broadcasting to {channel}: {e}")
                 disconnected_clients.append(connection)
@@ -68,6 +75,10 @@ class ConnectionManager:
         # Remove disconnected clients
         for client in disconnected_clients:
             self.disconnect(client, channel)
+
+    async def broadcast_to_room(self, channel: str, data: Any):
+        """Broadcast message to all clients in a specific room/channel"""
+        await self.broadcast(channel, data)
 
     def get_connection_count(self, channel: str) -> int:
         """Get number of active connections for a channel"""
@@ -79,3 +90,7 @@ class ConnectionManager:
             channel: len(connections)
             for channel, connections in self.active_connections.items()
         }
+
+
+# Global websocket manager instance
+websocket_manager = ConnectionManager()

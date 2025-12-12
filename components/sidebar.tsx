@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from "next/navigation";
 import { useSidebar } from "@/components/sidebar-context";
 import { useAuth } from "@/components/auth-context";
+import { ResourceSwitcher } from "@/components/resource-switcher";
 import {
   Shield,
   Activity,
@@ -65,8 +66,8 @@ const navigation = [
     badge: null,
   },
   {
-    name: "3D Globe",
-    href: "/dashboard/globe",
+    name: "Threat Map",
+    href: "/dashboard/map",
     icon: Globe,
     current: false,
     badge: "NEW",
@@ -75,27 +76,6 @@ const navigation = [
     name: "Resources",
     href: "/dashboard/resources",
     icon: Server,
-    current: false,
-    badge: null,
-  },
-  {
-    name: "Security Logs",
-    href: "/dashboard/logs",
-    icon: FileText,
-    current: false,
-    badge: null,
-  },
-  {
-    name: "User Management",
-    href: "/dashboard/users",
-    icon: Users,
-    current: false,
-    badge: null,
-  },
-  {
-    name: "Security Policies",
-    href: "/dashboard/policies",
-    icon: Lock,
     current: false,
     badge: null,
   },
@@ -163,6 +143,13 @@ export function Sidebar({ className }: SidebarProps) {
           {!collapsed && <span className="text-xs text-green-400 font-mono">SYSTEM OPERATIONAL</span>}
         </div>
       </div>
+
+      {/* Resource Switcher */}
+      {!collapsed && (
+        <div className="p-4 border-b border-green-500/30">
+          <ResourceSwitcher />
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-1">

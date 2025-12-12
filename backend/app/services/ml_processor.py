@@ -57,7 +57,7 @@ class MLPredictionProcessor:
     def process_prediction(self, msg_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
         Convert ML prediction from Redis message to alert data
-        Only creates alerts when >40% of flows in batch are attacks
+        Only creates alerts when batch size >= 40 flows AND >40% of flows are attacks
         """
         try:
             # Check if this is a batch results message
@@ -81,7 +81,14 @@ class MLPredictionProcessor:
                 (attack_count / total_flows) * 100 if total_flows > 0 else 0
             )
 
-            # THRESHOLD: Only create alerts when >40% of flows are attacks
+            # THRESHOLD 1: Only create alerts for batches with >= 40 flows
+            if total_flows < 40:
+                logger.debug(
+                    f"Skipping small batch: {total_flows} flows (minimum 40 required)"
+                )
+                return None
+
+            # THRESHOLD 2: Only create alerts when >40% of flows are attacks
             if attack_percentage < 40.0:
                 logger.debug(
                     f"Skipping batch with low attack ratio: {attack_percentage:.1f}% ({attack_count}/{total_flows})"
@@ -111,6 +118,19 @@ class MLPredictionProcessor:
             # Extract network details from flow_meta
             flow_meta = msg_data.get("flow_meta", {})
 
+            # Extract client information for user mapping
+            client_id = msg_data.get("client_id", "unknown")
+
+            # Map client_id to user_id (in production this would be from database)
+            # For now, map to your user ID as default
+            user_id_mapping = {
+                "cicflow-monitor-01": "21c9dde7-a586-44af-9f67-11f13b9ddd28",  # Your user ID
+                "target-server-01": "21c9dde7-a586-44af-9f67-11f13b9ddd28",  # Your user ID
+                "default": "21c9dde7-a586-44af-9f67-11f13b9ddd28",  # Your user ID as fallback
+            }
+
+            alert_user_id = user_id_mapping.get(client_id, user_id_mapping["default"])
+
             # Create alert data
             alert_data = {
                 "title": f"Batch Attack Detected ({sample_attack.get('model_version', 'Unknown')})",
@@ -123,7 +143,7 @@ class MLPredictionProcessor:
                 "confidence_score": min(
                     attack_percentage, 99.9
                 ),  # Use attack percentage as confidence
-                "user_id": "550e8400-e29b-41d4-a716-446655440000",  # Demo user
+                "user_id": alert_user_id,  # Dynamic user mapping
                 "raw_data": {
                     "batch_stats": {
                         "total_flows": total_flows,
@@ -136,6 +156,7 @@ class MLPredictionProcessor:
                     "message_id": msg_data.get("message_id"),
                     "timestamp": msg_data.get("timestamp"),
                     "received_at": datetime.now().isoformat(),
+                    "client_id": client_id,
                 },
             }
 

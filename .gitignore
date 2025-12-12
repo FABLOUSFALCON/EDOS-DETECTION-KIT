@@ -1,5 +1,28 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring-files.
 
+# Data files (too large for GitHub)
+*.parquet
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+
+# Large CSV files and ML data
+**/data/**/*.csv
+flows.csv
+test_flows.csv
+engineered_features.parquet
+
+# ML model files
+*.model
+*.bin
+
+# Virtual environments
+.venv/
+venv/
+env/
+cicflowmeter/.venv/
+
 # dependencies
 /node_modules
 /.pnp
@@ -51,3 +74,4 @@ next-env.d.ts
 **/.pytest_cache/
 **/.coverage
 **/.mypy_cache/
+backend/ml/data/04_feature/engineered_features.parquet

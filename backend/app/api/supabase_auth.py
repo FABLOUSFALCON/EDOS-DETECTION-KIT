@@ -37,15 +37,17 @@ async def verify_token(token: str = Depends(security)) -> dict:
             payload = jwt.decode(token_str, options={"verify_signature": False})
 
             return {
-                "user_id": payload.get("sub", "dev-user-id"),
+                "user_id": payload.get(
+                    "sub", "21c9dde7-a586-44af-9f67-11f13b9ddd28"
+                ),  # Your actual Supabase user ID
                 "email": payload.get("email", "dev@example.com"),
                 "role": "authenticated",
             }
 
         except Exception as jwt_error:
-            # If JWT decode fails, create a dev user
+            # If JWT decode fails, create a consistent dev user
             return {
-                "user_id": "development-user-123",
+                "user_id": "21c9dde7-a586-44af-9f67-11f13b9ddd28",  # Your actual Supabase user ID
                 "email": "dev@example.com",
                 "role": "authenticated",
             }
